@@ -23,6 +23,9 @@
 #include "LiteLib.h"
 #endif
 
+// liang: seccomp
+#include "seccomp.h"
+
 void *load_all(const char *path)
 {
 	int fd = open(path, O_RDONLY);
@@ -79,6 +82,21 @@ void setup_sigtrap()
 #else
 void setup_sigtrap() {}
 #endif
+
+static scmp_filter_ctx ctx;
+
+// liang: seccomp
+void setup_seccomp()
+{
+	setup_sigtrap();
+	int rc;
+	ctx = seccomp_init(SCMP_ACT_ALLOW);
+	fprintf(stderr, "seccomp_init %d\n", (int)ctx);
+	rc = seccomp_rule_add_exact(ctx, SCMP_ACT_ERRNO(1), SCMP_SYS(open), 0);
+	fprintf(stderr, "seccomp_rule_add_exact %d\n", rc);
+	rc = seccomp_load(ctx);
+	fprintf(stderr, "seccomp_load %d\n", rc);
+}
 
 int main(int argc, char **argv)
 {
@@ -153,6 +171,8 @@ int main(int argc, char **argv)
 		// Stack needs to be big enough that the call back into
 		// xil_allocate_memory, which uses the same stack, will succeed.
 
+	//liang: sandbox
+	setup_seccomp();
 	jump_from_pal_to_app();
 	asm(
 		"movl	%0,%%esp;"

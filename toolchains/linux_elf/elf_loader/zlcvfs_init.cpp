@@ -7,6 +7,8 @@
 #include "zlcvfs_init.h"
 #include "perf_measure.h"
 #include "ZLCEmitXdt.h"
+// liang: add zlc_util for debugging
+#include "zlc_util.h"
 
 ZLCVFS_Wrapper::ZLCVFS_Wrapper(XaxPosixEmulation *xpe, const char *path, const char *zarfile_path_str)
 {
@@ -21,7 +23,7 @@ ZLCVFS_Wrapper::ZLCVFS_Wrapper(XaxPosixEmulation *xpe, const char *path, const c
 	XfsErr err = (XfsErr) ENOENT;
 	XaxVFSHandleIfc *zarfile_hdl = NULL;
 	PerfMeasure *perf_measure = xpe->perf_measure;
-
+	
 	if (zarfile_path_str!=NULL)
 	{
 		XfsPath zarfile_path = { (char*) zarfile_path_str, (char*) zarfile_path_str };

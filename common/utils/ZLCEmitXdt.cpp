@@ -4,7 +4,8 @@
 
 ZLCEmitXdt::ZLCEmitXdt(ZoogDispatchTable_v1 *zdt, ZLCChattiness threshhold)
 {
-	this->_threshhold = threshhold;
+	this->_threshhold = threshhold; 
+	// this->_threshhold = chatty; //liang: disable for debugging
 	debuglog = (debug_logfile_append_f*)
 		(zdt->zoog_lookup_extension)("debug_logfile_append");
 }

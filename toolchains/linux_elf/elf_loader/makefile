@@ -5,41 +5,49 @@ include ../make.arch
 
 ZOOG_ROOT=../../..
 
+# liang: comment following targets for faster build
+
+# TARGETS=\
+# 	elf_loader.vendor_a.signed \
+# 	elf_loader.vendor_b.signed \
+# 	elf_loader.zoog_identity_test.signed \
+# 	elf_loader.app_start_time.signed \
+# 	elf_loader.hello.signed \
+# 	elf_loader.midori.signed \
+# 	elf_loader.midori_hot.signed \
+# 	elf_loader.midori_warm.signed \
+# 	elf_loader.navtest.signed \
+# 	elf_loader.tabman.signed \
+# 	elf_loader.keyval.signed \
+# 	elf_loader.keyval-test.signed \
+# 	elf_loader.getaddr.signed \
+# 	elf_loader.results_search_com.signed \
+# 	elf_loader.widgets_retailer_com.signed \
+# 	elf_loader.spreadsheet_office_org.signed \
+# 	elf_loader.wordprocessor_office_org.signed \
+# 	elf_loader.raster_graphics_net.signed \
+# 	elf_loader.vector_graphics_net.signed \
+# 	elf_loader.gnucash_org.signed \
+# 	elf_loader.marble_maps_net.signed \
+# 	elf_loader.xclock.signed \
+# 	elf_loader.xeyes.signed \
+# 	elf_loader.zhyperoid.signed \
+# 	elf_loader.zhyperoid-log-paths.signed \
+# 	elf_loader.craigslist.signed \
+# 	elf_loader.ebay.signed \
+# 	elf_loader.microsoft.signed \
+# 	elf_loader.reddit.signed \
+# 	elf_loader.craigslist_warm.signed \
+# 	elf_loader.ebay_warm.signed \
+# 	elf_loader.microsoft_warm.signed \
+# 	elf_loader.reddit_warm.signed \
+# 	elf_loader.cpuid_test.signed \
+# 	elf_loader.lion.signed \
+
 TARGETS=\
-	elf_loader.vendor_a.signed \
-	elf_loader.vendor_b.signed \
-	elf_loader.zoog_identity_test.signed \
-	elf_loader.app_start_time.signed \
-	elf_loader.hello.signed \
-	elf_loader.midori.signed \
-	elf_loader.midori_hot.signed \
-	elf_loader.midori_warm.signed \
-	elf_loader.navtest.signed \
-	elf_loader.tabman.signed \
-	elf_loader.keyval.signed \
-	elf_loader.keyval-test.signed \
-	elf_loader.getaddr.signed \
-	elf_loader.results_search_com.signed \
-	elf_loader.widgets_retailer_com.signed \
-	elf_loader.spreadsheet_office_org.signed \
-	elf_loader.wordprocessor_office_org.signed \
-	elf_loader.raster_graphics_net.signed \
-	elf_loader.vector_graphics_net.signed \
-	elf_loader.gnucash_org.signed \
-	elf_loader.marble_maps_net.signed \
-	elf_loader.xclock.signed \
-	elf_loader.xeyes.signed \
-	elf_loader.zhyperoid.signed \
-	elf_loader.zhyperoid-log-paths.signed \
-	elf_loader.craigslist.signed \
-	elf_loader.ebay.signed \
-	elf_loader.microsoft.signed \
-	elf_loader.reddit.signed \
-	elf_loader.craigslist_warm.signed \
-	elf_loader.ebay_warm.signed \
-	elf_loader.microsoft_warm.signed \
-	elf_loader.reddit_warm.signed \
-	elf_loader.cpuid_test.signed \
+	elf_loader.lion.signed \
+
+
 
 COMMON_UTILS_MODULE=$(ZOOG_ROOT)/common/utils/
 ELF_COMMON_MODULE=$(ZOOG_ROOT)/toolchains/linux_elf/common/
@@ -235,6 +243,8 @@ OBJS=$(call mapSrcsToObjs,elf_start_$(ARCH).o $(SRCS) $(MODULE_OBJS)) $(BUILD)/l
 	$(LIBGCC_PARTS_DIR)/$(BUILD)/_udivdi3.o \
 	$(LIBGCC_PARTS_DIR)/$(BUILD)/memcpy.o \
 	$(LIBGCC_PARTS_DIR)/$(BUILD)/memcmp.o \
+
+# $(ZOOG_ROOT)/toolchains/linux_elf/opt_crypto/$(BUILD)/liang_sha1.o \
 
 DEFINE_ENTRY_POINT=-Xlinker --entry -Xlinker _elfstart
 

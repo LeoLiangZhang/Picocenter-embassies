@@ -100,7 +100,7 @@ CoordinatorConnection::~CoordinatorConnection()
 
 void CoordinatorConnection::_send(void *data, uint32_t len)
 {
-	int rc;
+	int rc;//printf("liang: monitor sending data of size %d\n", len);
 	rc = send(sock, data, len, 0);
 	lite_assert(rc==(int)len);
 }
@@ -142,7 +142,7 @@ void CoordinatorConnection::_recv_loop()
 	uint8_t buf[ZK_SMALL_MESSAGE_LIMIT];
 	while (true)
 	{
-		read_size = read(sock, buf, sizeof(buf));
+		read_size = read(sock, buf, sizeof(buf));//printf("liang: monitor recv packet of size %d\n", read_size);
 		if (read_size<=0)
 		{
 			fprintf(stderr, "*** lost connection to coordinator\n");
@@ -493,7 +493,7 @@ void CoordinatorConnection::send_packet(NetBuffer *nb)
 		iov[0].iov_len = sizeof(cmhdr);
 		iov[1].iov_base = ZNB_DATA(znb);
 		iov[1].iov_len = info.packet_length;
-		rc = writev(sock, iov, 2);
+		rc = writev(sock, iov, 2);//printf("liang: monitor writev rc %d\n", rc);
 		lite_assert(rc==(int) (iov[0].iov_len + iov[1].iov_len));
 	}
 

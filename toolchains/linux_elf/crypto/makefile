@@ -75,9 +75,9 @@ INCS=\
 
 CFLAGS=\
 	$(INCS) \
-	-O3 \
+	-O0 \
 	-DUSE_CPPSTDLIB=1 \
-  -fexceptions \
+	-fexceptions \
 	-march=native \
 #	-g \
 	#-O2 \

@@ -7,6 +7,20 @@ void zhash(const uint8_t* input, uint32_t size, hash_t* hash) {
 	sph_sha1(&sha_ctx, input, size); 
 	sph_sha1_close(&sha_ctx, (uint8_t*)hash); 
 }
+
+// #include "liang_sha1_all.c"
+// void zhash(const uint8_t* input, uint32_t size, hash_t* hash) {
+// 	sha1nfo s; 
+// 	uint8_t *result, *output = (uint8_t *)hash;
+// 	int i;
+// 	sha1_init(&s);
+// 	sha1_write(&s, (const char*)input, size);
+// 	result = sha1_result(&s);
+// 	for(i = 0; i < 20; i++)
+// 		output[i] = result[i];
+// }
+
+
 #elif USE_SHA256
 void zhash(const uint8_t* input, uint32_t size, hash_t* hash) {
 	sph_sha256_context sha_ctx; 

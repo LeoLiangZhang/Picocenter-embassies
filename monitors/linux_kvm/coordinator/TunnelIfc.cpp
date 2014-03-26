@@ -47,22 +47,27 @@ TunnelIfc::TunnelIfc(Router *router, AppLink *app_link, TunIDAllocator* tunid)
 {
 	this->router = router;	// where we hand off incoming packets
 
-	const char *tun_device = "/dev/net/tun";
-	tun_fd = open(tun_device, O_RDWR);
-	lite_assert(tun_fd>=0);
+	// const char *tun_device = "/dev/net/tun";
+	// tun_fd = open(tun_device, O_RDWR);
+	// lite_assert(tun_fd>=0);
 
-	int rc;
-	rc = fcntl(tun_fd, F_SETFD, FD_CLOEXEC);
-	if (rc!=0)
-	{
-		fprintf(stderr, "Cannot open %s.\n"
-			"The most likely cause of this is that you aren't running with\n"
-			"permissions to open the device.\n",
-			tun_device);
-		lite_assert(rc==0);
-	}
+	// int rc;
+	// rc = fcntl(tun_fd, F_SETFD, FD_CLOEXEC);
+	// if (rc!=0)
+	// {
+	// 	fprintf(stderr, "Cannot open %s.\n"
+	// 		"The most likely cause of this is that you aren't running with\n"
+	// 		"permissions to open the device.\n",
+	// 		tun_device);
+	// 	lite_assert(rc==0);
+	// }
 	
-	int ioctlsocket = tunid->open_tunnel();
+	// int ioctlsocket = tunid->open_tunnel();
+
+  // liang: add
+  int rc; 
+  tun_fd = tunid->open_tunnel();
+  int ioctlsocket = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 
 	struct ifreq ifr;
 	tunid->setup_ifreq(&ifr);

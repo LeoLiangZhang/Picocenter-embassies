@@ -66,6 +66,8 @@ CRYPTO_MODULE_OBJS=\
 	SymEncKey.o \
 	KeyDerivationKey.o \
 
+#  liang_sha1.o \
+
 
 #ELF_COMMON_OBJS=\
 #	pure_virtual.o \

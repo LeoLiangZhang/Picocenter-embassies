@@ -17,6 +17,9 @@
 #include "ZLCArgs.h"
 #include "ZAuthoritativeOrigin.h"
 #include "SyncFactory.h"
+#include "zlc_util.h"
+
+
 
 ZCache::ZCache(ZLCArgs *zargs, MallocFactory *mf, SyncFactory *sf, ZLCEmit *ze, SendBufferFactory *sbf)
 {
@@ -27,14 +30,36 @@ ZCache::ZCache(ZLCArgs *zargs, MallocFactory *mf, SyncFactory *sf, ZLCEmit *ze, 
 
 	uint8_t *zeros = (uint8_t*) alloca(ZFTP_BLOCK_SIZE);
 	memset(zeros, 0, ZFTP_BLOCK_SIZE);
+	// ZLC_TERSE(ze, "liang: addr of zeros %d, sizeof %d\n",, zeros, sizeof(hash_of_ZFTP_BLOCK_SIZE_zeros.bytes));
+	// liang_zhash(zeros, ZFTP_BLOCK_SIZE, &hash_of_ZFTP_BLOCK_SIZE_zeros);
 	zhash(zeros, ZFTP_BLOCK_SIZE, &hash_of_ZFTP_BLOCK_SIZE_zeros);
+	// liang: precompute a hash for 65536 zeros.
+	// memcpy(hash_of_ZFTP_BLOCK_SIZE_zeros.bytes, "\x95\xb8\x7c\xf2\x24\xbc\x7e\xb0\x02\x9c\x1e\xe8\x10\xbc\xca\x39\x8c\x67\x2b\x48", sizeof(hash_of_ZFTP_BLOCK_SIZE_zeros.bytes));
+
+	// liang: test hash function
+	// sph_sha1_context sha_ctx;
+	// ZLC_TERSE(ze, "liang: sph_sha1_init\n"); 
+	// sph_sha1_init(&sha_ctx); 
+	// ZLC_TERSE(ze, "liang: sph_sha1\n"); 
+	// sph_sha1(&sha_ctx, zeros, ZFTP_BLOCK_SIZE); 
+	// ZLC_TERSE(ze, "liang: sph_sha1_close\n"); 
+	// // sph_sha1_close(&sha_ctx, (uint8_t*)&hash_of_ZFTP_BLOCK_SIZE_zeros);
+	// // uint8_t my_hash[20];
+	// // sph_sha1_close(&sha_ctx, (uint8_t*)my_hash); 
+	// ZLC_TERSE(ze, "liang: zhash updated fix value.\n");
+
+	// liang: print hash value
+	// ZLC_TERSE(ze, "liang: printing hash value\n");
+	// for(int i = 0; i < 20; i++)
+	// 	ZLC_TERSE(ze, "%x",, hash_of_ZFTP_BLOCK_SIZE_zeros.bytes[i]);
+	// ZLC_TERSE(ze, "\nliang: end of hash value\n");
 
 	hash_table_init(&file_ht, mf, ZCachedFile::__hash__, ZCachedFile::__cmp__);
 	hash_table_init(&name_ht, mf, ZCachedName::__hash__, ZCachedName::__cmp__);
 
 	zfile_server = NULL;
 	zfile_client = NULL;
-
+	
 	if (zargs->index_dir != NULL)
 	{
 #if ZLC_USE_PERSISTENT_STORAGE

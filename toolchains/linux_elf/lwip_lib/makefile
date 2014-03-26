@@ -19,7 +19,7 @@ CFLAGS=\
 	$(INCS) \
 	-DUSE_OPENSSL
 
-LWIP_DOWNLOAD_SITE=http://download.savannah.gnu.org/releases/lwip/
+LWIP_DOWNLOAD_SITE=http://download.savannah.gnu.org/releases/lwip/older_versions/
 #LWIP_DOWNLOAD_SITE=http://ftp.twaren.net/Unix/NonGNU/lwip/
 #LWIP_DOWNLOAD_SITE=http://nongnu.askapache.com/lwip/
 LWIP_VERSION=-1.4.0.rc2

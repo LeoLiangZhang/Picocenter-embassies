@@ -17,6 +17,8 @@
 #include "malloc_factory_operator_new.h"
 #include "ambient_malloc.h"
 
+// int lion_main(int argc, char **argv);
+
 int main(int argc, char **argv, const char **envp)
 {
 	LaunchState ls;
@@ -52,6 +54,10 @@ int main(int argc, char **argv, const char **envp)
 		// .config.c we link this thing to.
 
 	setup_lwip(ls.xax_dispatch_table, rc->get_xvnc_start_detector());
+
+	// liang: test network stack
+	// lion_main(argc, argv);
+	// exit(0);
 
 	LinkedListIterator lli;
 	int zi;

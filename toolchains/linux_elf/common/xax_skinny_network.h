@@ -53,6 +53,7 @@ public:
 	XIPifconfig *get_ifconfig(XIPVer ipver);
 
 	void dispatch_packet(ZeroCopyBuf *zcb, IPInfo *info);
+	// ZLCEmit *_liang_ze;
 
 private:
 	ZoogDispatchTable_v1 *zdt;

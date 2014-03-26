@@ -658,6 +658,117 @@ ZCachedFile::InstallResult ZCachedFile::_install_metadata(ZFileReplyFromServer *
 
 	return NEW_DATA;
 }
+// #include "liang_sha1.c"
+
+// #define HASH_LENGTH 20
+// #define BLOCK_LENGTH 64
+
+// union _buffer {
+// 	uint8_t b[BLOCK_LENGTH];
+// 	uint32_t w[BLOCK_LENGTH/4];
+// };
+
+// union _state {
+// 	uint8_t b[HASH_LENGTH];
+// 	uint32_t w[HASH_LENGTH/4];
+// };
+
+// typedef struct sha1nfo {
+// 	union _buffer buffer;
+// 	uint8_t bufferOffset;
+// 	union _state state;
+// 	uint32_t byteCount;
+// 	uint8_t keyBuffer[BLOCK_LENGTH];
+// 	uint8_t innerHash[HASH_LENGTH];
+// } sha1nfo;
+
+/* public API - prototypes - TODO: doxygen*/
+
+// /**
+//  */
+// void sha1_init(sha1nfo *s);
+// /**
+//  */
+// void sha1_writebyte(sha1nfo *s, uint8_t data);
+// /**
+//  */
+// void sha1_write(sha1nfo *s, const char *data, size_t len);
+// /**
+//  */
+// uint8_t* sha1_result(sha1nfo *s);
+// /**
+//  */
+// void sha1_initHmac(sha1nfo *s, const uint8_t* key, int keyLength);
+// /**
+//  */
+// uint8_t* sha1_resultHmac(sha1nfo *s);
+
+// // end of header from liang_sha1.c
+
+// void zzhash(const uint8_t* input, uint32_t size, hash_t* hash) {
+// 	sha1nfo s; 
+// 	uint8_t *result, *output = (uint8_t *)hash;
+// 	int i;
+// 	sha1_init(&s);
+// 	sha1_write(&s, (const char*)input, size);
+// 	result = sha1_result(&s);
+// 	for(i = 0; i < 20; i++)
+// 		output[i] = result[i];
+// }
+
+// static ZLCEmit *liang_debug_ze;
+
+// static void hexDump (char *desc, void *addr, int len) {
+//     int i;
+//     unsigned char buff[17];
+//     unsigned char *pc = (unsigned char*)addr;
+
+//     // Output description if given.
+//     if (desc != NULL)
+//         ZLC_TERSE (liang_debug_ze, "%s:\n",, desc);
+
+//     // Process every byte in the data.
+//     for (i = 0; i < len; i++) {
+//         // Multiple of 16 means new line (with line offset).
+
+//         if ((i % 16) == 0) {
+//             // Just don't print ASCII for the zeroth line.
+//             if (i != 0)
+//                 ZLC_TERSE (liang_debug_ze, "  %s\n",, buff);
+
+//             // Output the offset.
+//             ZLC_TERSE (liang_debug_ze, "  %04x ",, i);
+//         }
+
+//         // Now the hex code for the specific character.
+//         ZLC_TERSE (liang_debug_ze, " %02x",, pc[i]);
+
+//         // And store a printable ASCII character for later.
+//         if ((pc[i] < 0x20) || (pc[i] > 0x7e))
+//             buff[i % 16] = '.';
+//         else
+//             buff[i % 16] = pc[i];
+//         buff[(i % 16) + 1] = '\0';
+//     }
+
+//     // Pad out last line if not exactly 16 characters.
+//     while ((i % 16) != 0) {
+//         ZLC_TERSE (liang_debug_ze, "   ");
+//         i++;
+//     }
+
+//     // And print the final ASCII bit.
+//     ZLC_TERSE (liang_debug_ze, "  %s\n",, buff);
+// }
+
+// static void liang_debug(const char *msg) {
+// 	void *addr = &msg;
+// 	ZLC_TERSE(liang_debug_ze, msg);
+// 	// print stack
+// 	ZLC_TERSE(liang_debug_ze, "liang: msg@%x = %x\n",, &msg, msg);
+// 	ZLC_TERSE(liang_debug_ze, "liang: addr@%x = %x\n",, &addr, addr);
+// 	hexDump(NULL, &addr, 512);
+// }
 
 hash_t ZCachedFile::_compute_file_hash(ZFTPFileMetadata *metadata, hash_t *root_hash)
 {
@@ -669,7 +780,19 @@ hash_t ZCachedFile::_compute_file_hash(ZFTPFileMetadata *metadata, hash_t *root_
 	*root_hash_ptr = *root_hash;
 
 	hash_t computed_file_hash;
+	// liang_debug_ze = ze;
+	// ZLC_TERSE(ze, "liang: _compute_file_hash zfm_size@%x = %x\n",, &zfm_size, zfm_size);
+	// ZLC_TERSE(ze, "liang: _compute_file_hash zfm@%x = %x\n",, &zfm, zfm);
+	// ZLC_TERSE(ze, "liang: _compute_file_hash root_hash_ptr@%x = %x\n",, &root_hash_ptr, root_hash_ptr);
+	// liang_debug("liang: starting liang_zhash_debug\n");
+	// void *ptr = &ZCachedFile::_compute_file_hash;
+	// ZLC_TERSE(ze, "liang: _compute_file_hash addr %x",, ptr);
+	// ZLC_TERSE(ze, "liang: liang_zhash_debug addr %x",, &liang_zhash_debug);
+	// ZLC_TERSE(ze, "II== liang: _compute_file_hash size %d, buf %x\n",, zfm_size, zfm);
+	// liang_zhash_debug((uint8_t*) zfm, zfm_size, &computed_file_hash, liang_debug);
 	zhash((uint8_t*) zfm, zfm_size, &computed_file_hash);
+	// ZLC_TERSE(ze, "II== liang: _compute_file_hash 2\n");
+
 
 	return computed_file_hash;
 }
@@ -876,7 +999,9 @@ void ZCachedFile::install_reply(ZFileReplyFromServer *reply)
 	ZLC_CHATTY(ze, "II== ===== Install reply\n");
 	ZLC_CHATTY(ze, "II== Install metadata\n");
 	InstallResult ir;
+	ZLC_CHATTY(ze, "II== liang: _install_metadata\n");
 	ir = _install_metadata(reply);
+	ZLC_CHATTY(ze, "II== liang: after _install_metadata\n");
 	if (ir==FAIL)
 	{
 		ZLC_COMPLAIN(ze, "Couldn't validate metadata, so couldn't allocate data structures.\n");

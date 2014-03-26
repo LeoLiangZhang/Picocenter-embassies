@@ -160,7 +160,7 @@ ZLCVFS::ZLCVFS(XaxPosixEmulation* xpe, ZLCEmit* ze)
 		(UDPEndpoint*) mf_malloc(xpe->mf, sizeof(UDPEndpoint));
 	this->zlcargs.origin_zftp =
 		(UDPEndpoint*) mf_malloc(xpe->mf, sizeof(UDPEndpoint));
-	ZLC_TERSE(ze, "ZLCVFS starts, calling evil\n");
+	ZLC_TERSE(ze, "ZLCVFS starts, calling evil!\n");
 	_evil_get_server_addresses(zlcargs.origin_lookup, zlcargs.origin_zftp);
 	SendBufferFactory_Xnb *sbf = new SendBufferFactory_Xnb(xpe->zdt);
 	SyncFactory *sf = xpe->xax_skinny_network->get_timer_sf();
@@ -169,6 +169,7 @@ ZLCVFS::ZLCVFS(XaxPosixEmulation* xpe, ZLCEmit* ze)
 
 
 	socket_factory = new SocketFactory_Skinny(xpe->xax_skinny_network);
+
 	ThreadFactory *thread_factory = new ThreadFactory_Cheesy(xpe->zdt);
 
 	uint32_t mtu = 16834;

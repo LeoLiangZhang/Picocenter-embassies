@@ -36,7 +36,7 @@ void ZLookupClient::_open_socket()
 hash_t ZLookupClient::lookup_url(const char *url)
 {
 	mutex->lock();
-
+	// ZLC_TERSE(ze, "liang: ZLookupClient::lookup_url %s\n",, url);
 	_open_socket();
 
 	nonce++;

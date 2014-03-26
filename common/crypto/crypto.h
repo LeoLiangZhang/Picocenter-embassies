@@ -27,6 +27,8 @@ extern "C" {
 
 #include "types.h"
 
+// #include "liang_sha1.h"
+
 /*************************************************************
  * Note: Make sure your compiler has enabled SSE2 support!   *
  *       In VS: Project Properties->C/C++->Code Generation   *
@@ -75,6 +77,8 @@ typedef struct {
  *          Assumed to be correctly sized at HASH_SIZE.
  */
 void zhash(const uint8_t* input, uint32_t size, hash_t* hash);
+
+// void liang_zhash(const uint8_t* input, uint32_t size, hash_t* hash);
 
 //#define MAC_CTX vmac_ctx_t
 #define MAC_SIZE VMAC_TAG_LEN / 8

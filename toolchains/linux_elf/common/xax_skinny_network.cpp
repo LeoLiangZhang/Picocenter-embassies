@@ -263,6 +263,8 @@ XaxSkinnyNetwork::XaxSkinnyNetwork(ZoogDispatchTable_v1 *zdt, MallocFactory *mf)
 {
 	this->zdt = zdt;
 	this->mf = mf;
+	//liang: expose ze
+	// this->_liang_ze = this->ze;
 
 	// placebo must be in place before we begin using PacketFilter.
 	placebo.placebo.methods = &placebo_methods;
@@ -300,7 +302,7 @@ XaxSkinnyNetworkPlacebo_Methods XaxSkinnyNetwork::placebo_methods =
 
 bool xax_skinny_socket_init(XaxSkinnySocket *skinny, XaxSkinnyNetwork *xsn, uint16_t port_host_order, XIPVer ipver)
 {
-	skinny->xsn = xsn;
+	skinny->xsn = xsn;//ZLC_TERSE(xsn->_liang_ze, "liang: xax_skinny_socket_init\n");
 	if (port_host_order!=0)
 	{
 		// if this port is already claimed, we'll explode in
@@ -324,7 +326,7 @@ bool xax_skinny_socket_init(XaxSkinnySocket *skinny, XaxSkinnyNetwork *xsn, uint
 
 	skinny->ph = xsn_network_register_handler(
 		xsn, ipver, PROTOCOL_UDP, skinny->local_port_host_order);
-
+	// ZLC_TERSE(xsn->_liang_ze, "liang: skinny->valid %d\n",, skinny->valid);
 	return skinny->valid;
 }
 
@@ -342,6 +344,7 @@ ZoogNetBuffer *xax_skinny_socket_prepare_packet(XaxSkinnySocket *skinny, UDPEndp
 void xax_skinny_socket_send(XaxSkinnySocket *skinny, ZoogNetBuffer *znb, bool release)
 {
 	(skinny->xsn->get_xdt()->zoog_send_net_buffer)(znb, release);
+	// ZLC_TERSE(skinny->xsn->_liang_ze, "liang: sent packet of size %d\n",, znb->capacity);
 }
 
 // the deprecated memcpy ifc
@@ -416,7 +419,7 @@ ZeroCopyBuf *xax_skinny_socket_recv_packet(XaxSkinnySocket *skinny, UDPEndpoint 
 			msg->zcb = NULL;	// we've got it, thanks.
 				// Ugh. Yes. I'm communicating the ownership change by
 				// reaching into the object and nulling its field. Yuck.
-
+			// ZLC_TERSE(skinny->xsn->_liang_ze, "liang: received packet of size  %d\n",, zcb->len());
 			cheesy_free(msg);
 			break;
 		}

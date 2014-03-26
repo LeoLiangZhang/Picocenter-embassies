@@ -52,7 +52,7 @@ void client()
   char recvline[1000];
 
   n = 0, recvline[0] = 0;
-  strcpy(srv_ip, "10.1.0.1");
+  strcpy(srv_ip, "10.1.0.250");
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_DGRAM,0);
   if(sockfd < 0){

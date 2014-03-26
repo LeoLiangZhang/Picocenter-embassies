@@ -30,6 +30,7 @@
 #include "pal_abi/pal_basic_types.h"
 
 typedef struct {
+	uint32_t magic;
 	uint32_t cert_len;		// *network order*
 	uint32_t binary_len;	// *network order*
 	// followed by cert_len bytes of ZoogCert

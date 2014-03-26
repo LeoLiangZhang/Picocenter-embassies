@@ -126,6 +126,7 @@ INCS=\
 	-I$(ZOOG_ROOT)/monitors/linux_dbg/common \
 	-I$(ZOOG_ROOT)/common/ifc \
 	-I$(ZOOG_ROOT)/common/crypto \
+	-I$(ZOOG_ROOT)/monitors/linux_dbg/pal/libseccomp \
 
 CFLAGS=\
 	-g \
@@ -151,7 +152,7 @@ $(BUILD)/linker_script: $(ADJ_LINKER_SCRIPT)
 	$(ADJ_LINKER_SCRIPT) 0x20000000 > $@
 
 $(BUILD)/xax_port_pal: $(XAXPORTPAL_OBJS) $(BUILD)/linker_script
-	$(CXX) -static $(XAXPORTPAL_OBJS) -T$(BUILD)/linker_script -o $@ $(LIBS)
+	$(CXX) -static $(XAXPORTPAL_OBJS) -T$(BUILD)/linker_script -o $@ $(LIBS) $(ZOOG_ROOT)/monitors/linux_dbg/pal/libseccomp/libseccomp.a
 
 #$(BUILD)/zutexercise: $(ZUTEXERCISE_OBJS)
 #	$(CC) -static $(ZUTEXERCISE_OBJS) -o $@ -lpthread -lcrypto

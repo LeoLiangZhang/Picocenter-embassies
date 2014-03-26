@@ -24,6 +24,7 @@ TARGETS=\
 	keyval-test.zguest \
 	getaddr.zguest \
 	gimp.zguest \
+	lion.zguest \
 
 LWIP_LIB_DIR=$(ZOOG_ROOT)/toolchains/linux_elf/lwip_lib
 FASTPATH_TEST_DIR=$(ZOOG_ROOT)/toolchains/linux_elf/fastpath_test
@@ -73,6 +74,8 @@ SRCS=\
 	xvnc_start_detector.cpp \
 	VncZone.cpp \
 	DbusZone.cpp \
+	
+	# lion.cpp \
 
 OBJS=$(call mapSrcsToObjs, $(SRCS) $(MODULE_OBJS))
 

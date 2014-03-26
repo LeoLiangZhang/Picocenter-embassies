@@ -27,11 +27,13 @@ INCS=\
 NOSTDLIB=-nostdlib -fno-exceptions
 
 CFLAGS=\
-	-g -O3 -pie -fpie -static $(NOSTDLIB) \
+	-g -O0 -pie -fpie -static $(NOSTDLIB) \
 	$(INCS) \
 	-DELFOBJ_USE_LIBC=0 \
 	-DNOEXCEPTIONS \
 	-march=native \
+
+	# -g -O3 -pie -fpie -static $(NOSTDLIB) \
 
 #	-D_GNU_SOURCE \
 #	-DZOOG_ROOT='"$(realpath $(ZOOG_ROOT))"' \

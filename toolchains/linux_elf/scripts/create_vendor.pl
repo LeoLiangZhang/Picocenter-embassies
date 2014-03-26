@@ -2,7 +2,8 @@
 # Create the keys, certs, and cert chains for a vendor, specified by DNS name
 
 $vendor_name = $ARGV[0]; 
-$base = $ENV{"HOME"} . "/zoog/toolchains/linux_elf/crypto/";
+#$base = $ENV{"HOME"} . "/zoog/toolchains/linux_elf/crypto/";
+$base = "../../../toolchains/linux_elf/crypto/";
 
 @names = split("\\.", $vendor_name);
 @names = reverse @names;
@@ -46,7 +47,7 @@ foreach $name (@names) {
 	unless (-e $chainfile) {
 		$cmd = "$base/build/crypto_util --genchain $chainfile $parent_certs $certfile ";
 		print "Creating chain for: $vendor_name\n";
-		#print "$cmd\n";
+		print "$cmd\n";
 		system($cmd);
 	}
 
