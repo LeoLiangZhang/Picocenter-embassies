@@ -34,5 +34,5 @@ include ../make.in
 ########## Rules
 
 $(BUILD)/lion-pie: $(H_OBJS)
-	$(CXX) -pie $(CFLAGS) $^ -o $@
+	$(CXX) -pie $(CFLAGS) $^ -o $@ -lm
 

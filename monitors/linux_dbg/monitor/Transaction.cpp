@@ -24,7 +24,7 @@
 // liang: enable tracing
 // comment this line: fprintf(stderr, "handling %s\n", e);
 // to disable tracing.
-#define XAXOP_STRACE(e)  fprintf(stderr, "handling %s\n", e);
+#define XAXOP_STRACE(e)  //fprintf(stderr, "handling %s\n", e);
 
 //////////////////////////////////////////////////////////////////////////////
 // A pukey polymorphic wrapper for making most reply objects magically

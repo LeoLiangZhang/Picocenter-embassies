@@ -7,23 +7,76 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <time.h>
+#include <sys/times.h>
+#include <sys/time.h>
 
 
 void print_hosts();
-void client();
-void server();
+void udp_client();
+void udp_server();
 void tcp_client();
 void tcp_server();
 
+// #include "linpack.c"		
+#include "whetstone.c"
+
+#define _printf(...) fprintf(stderr, __VA_ARGS__);
+
+static struct tms my_tms;
+// static struct timeval tv;
+typedef long long my_time_t;
+
+void print_timeofday()
+{
+  gettimeofday(&tv, NULL);
+  _printf("sec %d, ms %d\n", (int)tv.tv_sec, (int)tv.tv_usec);
+}
+
+// static my_time_t _get_microsec()
+// {
+//   my_time_t t = 0;
+//   gettimeofday(&tv, NULL);
+//   t = tv.tv_sec;
+//   t = t * 1000000;
+//   t += tv.tv_usec;
+//   return t;
+// }
+
 int main(int argc, char**argv)
 {
+  
+  clock_t c1, c2; double ts; time_t t0;
+  my_time_t t1, t2;
+  c1 = times(&my_tms);
+  t1 = get_microsec();
+
   print_hosts();
-  fprintf(stderr, "hello world!\n");
-  server();
-  // client();
+  t0 = time(NULL);
+  print_timeofday();
+  _printf("hello world!\n");
+  // udp_server();
+  // udp_client();
   // tcp_client();
   // tcp_server();
-  fprintf(stderr, "Bye\n");
+  // linpack_main();
+  whetstone_main();
+
+  _printf("Bye\n");
+  _printf("time: %ld s\n", time(NULL)-t0);
+  c2 = times(&my_tms);
+  t2 = get_microsec();
+  ts = (((double)(c2 - c1)) / (double)CLOCKS_PER_SEC ); // in second
+  _printf("Total time is: %d clock, %f s, %f ms\n", (int)(c2-c1), ts, ts*1000.0);
+  _printf("Total time in microsec: %lld\n", t2-t1);
+  print_timeofday();
+  exit(0);
+  return 0;
+}
+
+void test_clock()
+{
+
 }
 
 void print_hosts()
@@ -33,30 +86,33 @@ void print_hosts()
   char buf[80];
   fd = fopen("/etc/hosts", "r");
   if(fd == NULL) {
-    fprintf(stderr, "Cannot open /etc/hosts \n");
+    _printf("Cannot open /etc/hosts \n");
     return;
   }
-  fprintf(stderr, "print /etc/hosts\n");
+  _printf("print /etc/hosts\n");
   while((count = fread(buf, 1, sizeof(buf), fd))) {
     fwrite(buf, 1, count, stderr);
   }
-  fprintf(stderr, "DONE\n");
+  _printf("DONE\n");
 }
 
-void client()
+void udp_client()
 {
   char srv_ip[16];
   int sockfd, n, i;
   struct sockaddr_in servaddr;//,cliaddr;
   char sendline[1000];
   char recvline[1000];
+  clock_t c1, c2; double ts; my_time_t mt1, mt2;
+  time_t t1, t2;
+  int count = 1000;
 
   n = 0, recvline[0] = 0;
-  strcpy(srv_ip, "10.1.0.250");
+  strcpy(srv_ip, "10.1.0.1");
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_DGRAM,0);
   if(sockfd < 0){
-    fprintf(stderr, "Cannot open socket.\n");
+    _printf("Cannot open socket.\n");
     return;
   }
 
@@ -65,19 +121,31 @@ void client()
   servaddr.sin_addr.s_addr=inet_addr(srv_ip);
   servaddr.sin_port=htons(32000);
 
-  for(i = 0; i < 10; i++) {
+  c1 = clock();
+  t1 = time(0);
+  mt1 = get_microsec();
+  for(i = 0; i < count; i++) {
     sprintf(sendline, "#%d# Hello world!\n", i); 
-    fprintf(stderr, "Sending message: %s\n", sendline);
+    // disable printf while benchmarking
+    // _printf("Sending message: %s\n", sendline);
     sendto(sockfd,sendline,strlen(sendline),0,
 	   (struct sockaddr *)&servaddr,sizeof(servaddr));
 
   }
+  c2 = clock();
+  t2 = time(0);
+  mt2 = get_microsec();
+  ts = (((double)(c2 - c1)) / (double)CLOCKS_PER_SEC ); // in second
+  _printf("Send %d packets in %f s, or %f ms\n", count, ts, ts*1000.0);
+  _printf("Send %d packets in %d s\n", count, (int)(t2-t1));
+  _printf("Send %d packets in %lld microsec, or %f microsec/packet \n", count, (mt2-mt1), (double)(mt2-mt1)/(double)count );
 
-  // fprintf(stderr, "Receiving message\n");
+
+  // _printf("Receiving message\n");
   // n=recvfrom(sockfd,recvline,1000,0,NULL,NULL);
   // recvline[n]=0;
-  // fprintf(stderr, "Received the following:\n");
-  // fprintf(stderr, "%s", recvline);
+  // _printf("Received the following:\n");
+  // _printf("%s", recvline);
 }
 
 void tcp_client()
@@ -93,7 +161,7 @@ void tcp_client()
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_STREAM,0);
   if(sockfd < 0){
-    fprintf(stderr, "Cannot open socket.\n");
+    _printf("Cannot open socket.\n");
     return;
   }
 
@@ -103,30 +171,30 @@ void tcp_client()
   servaddr.sin_port=htons(32000);
 
   if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0){
-    fprintf(stderr, "Cannot connect to server.");
+    _printf("Cannot connect to server.");
     return;
   }
 
   sprintf(sendline, "#%d# Hello world!\n", 0); 
-  fprintf(stderr, "Sending message: %s\n", sendline);
+  _printf("Sending message: %s\n", sendline);
   n = write(sockfd, sendline, strlen(sendline));
   if (n < 0){
-    fprintf(stderr, "Cannot write to the stream.");
+    _printf("Cannot write to the stream.");
     return;
   }
 
-  fprintf(stderr, "Reading message\n");
+  _printf("Reading message\n");
   n = read(sockfd, recvline, sizeof(recvline));
   if (n < 0) {
-    fprintf(stderr, "Cannot read from the stream.");
+    _printf("Cannot read from the stream.");
     return;
   }
-  fprintf(stderr, "Received %d bytes: %s\n", n, recvline);
+  _printf("Received %d bytes: %s\n", n, recvline);
   close(sockfd);
   return;
 }
 
-void server()
+void udp_server()
 {
   int sockfd,n;
   struct sockaddr_in servaddr,cliaddr;
@@ -146,15 +214,15 @@ void server()
       len = sizeof(cliaddr);
       n = recvfrom(sockfd,mesg,1000,0,(struct sockaddr *)&cliaddr,&len);
       sendto(sockfd,mesg,n,0,(struct sockaddr *)&cliaddr,sizeof(cliaddr));
-      fprintf(stderr, "-------------------------------------------------------\n");
+      _printf("-------------------------------------------------------\n");
       mesg[n] = 0;
-      fprintf(stderr, "Received the following:\n");
-      fprintf(stderr, "%s",mesg);
-      fprintf(stderr, "-------------------------------------------------------\n");
+      _printf("Received the following:\n");
+      _printf("%s",mesg);
+      _printf("-------------------------------------------------------\n");
     }
 }
 
-#define DieWithError(msg) { fprintf(stderr, "%s\n",msg); return; }
+#define DieWithError(msg) { _printf("%s\n",msg); return; }
 #define RCVBUFSIZE 32   /* Size of receive buffer */
 
 void HandleTCPClient(int clntSocket)

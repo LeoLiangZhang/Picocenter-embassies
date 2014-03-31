@@ -85,15 +85,56 @@ void setup_sigtrap() {}
 
 static scmp_filter_ctx ctx;
 
+
 // liang: seccomp
 void setup_seccomp()
 {
+	const char *allow_list[] = {
+		"_llseek",
+		"bind",
+		"brk",
+		"clone",
+		"close",
+		"connect",
+		"execve",
+		"futex",
+		"getpid",
+		"gettid",
+		"gettimeofday",
+		"mprotect",
+		"munmap",
+		"nanosleep",
+		"open",
+		"read",
+		"rt_sigaction",
+		"rt_sigreturn",
+		"set_thread_area",
+		"setitimer",
+		"shmat",
+		"shmctl",
+		"shmget",
+		"socket",
+		"time",
+		"times",
+		"uname",
+		"write",
+
+		"mmap2",
+		"ipc",
+	};
 	setup_sigtrap();
-	int rc;
-	ctx = seccomp_init(SCMP_ACT_ALLOW);
+	int rc; unsigned int i;
+	int syscall = __NR_SCMP_ERROR;
+	ctx = seccomp_init(SCMP_ACT_TRAP);
 	fprintf(stderr, "seccomp_init %d\n", (int)ctx);
-	rc = seccomp_rule_add_exact(ctx, SCMP_ACT_ERRNO(1), SCMP_SYS(open), 0);
-	fprintf(stderr, "seccomp_rule_add_exact %d\n", rc);
+	// rc = seccomp_rule_add_exact(ctx, SCMP_ACT_ERRNO(1), SCMP_SYS(open), 0);
+	// fprintf(stderr, "seccomp_rule_add_exact,  %d\n", rc);
+	for (i = 0; i < sizeof(allow_list)/sizeof(void *); i ++){
+		syscall = seccomp_syscall_resolve_name(allow_list[i]);
+		rc = seccomp_rule_add(ctx, SCMP_ACT_ALLOW, syscall, 0);
+		fprintf(stderr, "rule %d: seccomp_rule_add_exact(%s, %d), rc=%d\n", i, allow_list[i], syscall, rc);
+		if (rc != 0) exit(1);
+	}
 	rc = seccomp_load(ctx);
 	fprintf(stderr, "seccomp_load %d\n", rc);
 }
