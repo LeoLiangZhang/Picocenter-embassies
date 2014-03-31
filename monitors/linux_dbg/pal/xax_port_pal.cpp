@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 		// xil_allocate_memory, which uses the same stack, will succeed.
 
 	//liang: sandbox
-	setup_seccomp();
+	// setup_seccomp();
 	jump_from_pal_to_app();
 	asm(
 		"movl	%0,%%esp;"
