@@ -1,6 +1,9 @@
 # commands
 
+## Environment variable 
 ZOOG_TUNID=1
+
+Following commands should be ran in chroot'ed environment. 
 
 ## terminal-1
 ```
@@ -29,20 +32,14 @@ ZOOG_TUNID=1 ./monitors/linux_dbg/pal/build/xax_port_pal toolchains/linux_elf/el
 ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false
 ```
 
+## run without *schroot*
 
-# Experiments
+schroot -d ~/Works/embassies/monitors/linux_kvm/monitor/ -- make
+schroot -d ~/Works/embassies/monitors/linux_kvm/coordinator/ -- make
 
-dbg:
+schroot -d ~/Works/embassies/monitors/linux_dbg/monitor/ -- make
+schroot -d ~/Works/embassies/monitors/linux_dbg/pal/ -- make
 
-Send 1000 packets in 543394 microsec, or 543.394000 microsec/packet
-
-Loops: 250000, Iterations: 1, Duration: 14 sec.
-C Converted Double Precision Whetstones: 1668.2 MIPS
+schroot -- bash -c "export DISPLAY=$DISPLAY ; cd monitors/linux_dbg/ && ./monitor/build/xax_port_monitor"
 
 
-kvm:
-
-Send 1000 packets in 741849 microsec, or 741.849000 microsec/packet
-
-Loops: 250000, Iterations: 1, Duration: 15 sec.
-C Converted Double Precision Whetstones: 1603.2 MIPS
