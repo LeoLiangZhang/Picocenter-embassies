@@ -3,9 +3,8 @@
  */
 // gcc -Wall -DSHA1TEST -o sha1test sha1.c && ./sha1test
 // http://oauth.googlecode.com/svn/code/c/liboauth/src/sha1.c
-
-// #ifndef _LIANG_SHA1_H
-// #define _LIANG_SHA1_H
+#ifndef _LIANG_SHA1_H
+#define _LIANG_SHA1_H
 
 #include <stdint.h>
 #include <string.h>
@@ -33,8 +32,6 @@ typedef struct sha1nfo {
   uint8_t keyBuffer[BLOCK_LENGTH];
   uint8_t innerHash[HASH_LENGTH];
 } sha1nfo;
-
-typedef void (* debug_t)(const char *msg);
 
 /* public API - prototypes - TODO: doxygen*/
 
@@ -65,6 +62,4 @@ uint8_t* sha1_resultHmac(sha1nfo *s);
  */
 void liang_zhash(const uint8_t* input, uint32_t size, void* hash);
 
-void liang_zhash_debug(const uint8_t* input, uint32_t size, void* hash, debug_t debug);
-
-// #endif //_LIANG_SHA1_H
+#endif //_LIANG_SHA1_H

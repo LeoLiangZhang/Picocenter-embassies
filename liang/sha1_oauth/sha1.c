@@ -2,6 +2,7 @@
  * placed in the public domain by Wei Dai and other contributors.
  */
 // gcc -Wall -DSHA1TEST -o sha1test sha1.c && ./sha1test
+// http://oauth.googlecode.com/svn/code/c/liboauth/src/sha1.c
 
 #include <stdint.h>
 #include <string.h>

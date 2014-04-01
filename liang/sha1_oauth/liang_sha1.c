@@ -159,25 +159,3 @@ void liang_zhash(const uint8_t* input, uint32_t size, void* hash) {
   for(i = 0; i < 20; i++)
     output[i] = result[i];
 }
-static char *test_text = "hello world 123";
-void liang_zhash_debug(const uint8_t* input, uint32_t size, void* hash, debug_t debug) {
-  sha1nfo s;
-  uint8_t *result = NULL;
-  uint8_t *output = (uint8_t *)hash;
-  char buf[16];
-  int i = 0;
-  for(i=0; i<16; i++) buf[i] = test_text[i];
-
-  debug("liang: liang_zhash_debug: sha1_init\n");
-  sha1_init(&s);
-  debug("liang: liang_zhash_debug: sha1_write\n");
-  sha1_write(&s, (const char*)input, size);
-  debug("liang: liang_zhash_debug: sha1_result\n");
-  result = sha1_result(&s);
-  debug("liang: liang_zhash_debug: sha1_result done\n");
-  for(i = 0; i < 20; i++)
-    output[i] = result[i];
-  debug("liang: liang_zhash_debug: end\n");
-  return;
-  
-}
