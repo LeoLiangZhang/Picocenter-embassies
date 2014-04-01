@@ -90,51 +90,68 @@ static scmp_filter_ctx ctx;
 void setup_seccomp()
 {
 	const char *allow_list[] = {
-		"_llseek",
-		"bind",
-		"brk",
-		"clone",
-		"close",
-		"connect",
-		"execve",
-		"futex",
-		"getpid",
-		"gettid",
-		"gettimeofday",
-		"mprotect",
-		"munmap",
-		"nanosleep",
-		"open",
-		"read",
-		"rt_sigaction",
-		"rt_sigreturn",
-		"set_thread_area",
-		"setitimer",
-		"shmat",
-		"shmctl",
-		"shmget",
-		"socket",
-		"time",
-		"times",
-		"uname",
-		"write",
+"clone",
+"close",
+"futex",
+"getpid",
+"gettid",
+"gettimeofday",
+"munmap",
+"nanosleep",
+"open",
+"read",
+"rt_sigreturn",
+"set_thread_area",
+"time",
+"times",
+"write",
 
-		"mmap2",
-		"ipc",
+// These are pseudo ones on x86
+"connect",
+"bind",
+"shmat",
+"shmctl",
+"shmget",
+"socket",
+
+"ipc",
+"mmap2",
+"mmap",
+"socketcall",
+"sigreturn",
 	};
-	setup_sigtrap();
+	// setup_sigtrap();
 	int rc; unsigned int i;
 	int syscall = __NR_SCMP_ERROR;
-	ctx = seccomp_init(SCMP_ACT_TRAP);
+	char *syscall_name;
+
+	// ctx = seccomp_init(SCMP_ACT_ERRNO(-1));
+	// ctx = seccomp_init(SCMP_ACT_ALLOW);
+	ctx = seccomp_init(SCMP_ACT_KILL);
+	// ctx = seccomp_init(SCMP_ACT_TRAP);
+	// ctx = seccomp_init(SCMP_ACT_TRACE(6));
 	fprintf(stderr, "seccomp_init %d\n", (int)ctx);
 	// rc = seccomp_rule_add_exact(ctx, SCMP_ACT_ERRNO(1), SCMP_SYS(open), 0);
 	// fprintf(stderr, "seccomp_rule_add_exact,  %d\n", rc);
+	
 	for (i = 0; i < sizeof(allow_list)/sizeof(void *); i ++){
 		syscall = seccomp_syscall_resolve_name(allow_list[i]);
+		syscall_name = (char *)allow_list[i];
 		rc = seccomp_rule_add(ctx, SCMP_ACT_ALLOW, syscall, 0);
-		fprintf(stderr, "rule %d: seccomp_rule_add_exact(%s, %d), rc=%d\n", i, allow_list[i], syscall, rc);
+		fprintf(stderr, "rule %d: seccomp_rule_add(%s, %d), rc=%d\n", i, syscall_name, syscall, rc);
 		if (rc != 0) exit(1);
 	}
+	syscall = (int)&allow_list;
+
+	// for (i = 0; i < 400; i++){
+	// 	// check syscall number
+	// 	if((syscall_name = seccomp_syscall_resolve_num_arch(NULL, i))){
+	// 		syscall = i;
+	// 		rc = seccomp_rule_add(ctx, SCMP_ACT_ALLOW, syscall, 0);
+	// 		fprintf(stderr, "rule %d: seccomp_rule_add(%s, %d), rc=%d\n", i, syscall_name, syscall, rc);
+	// 	}
+	// }
+
 	rc = seccomp_load(ctx);
 	fprintf(stderr, "seccomp_load %d\n", rc);
 }
@@ -213,7 +230,7 @@ int main(int argc, char **argv)
 		// xil_allocate_memory, which uses the same stack, will succeed.
 
 	//liang: sandbox
-	// setup_seccomp();
+	setup_seccomp();
 	jump_from_pal_to_app();
 	asm(
 		"movl	%0,%%esp;"

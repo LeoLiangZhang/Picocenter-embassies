@@ -55,8 +55,9 @@ int main(int argc, char**argv)
   t0 = time(NULL);
   print_timeofday();
   _printf("hello world!\n");
+  
   // udp_server();
-  // udp_client();
+  udp_client();
   // tcp_client();
   // tcp_server();
   // linpack_main();
