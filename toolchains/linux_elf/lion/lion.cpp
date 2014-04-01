@@ -20,6 +20,7 @@ void tcp_server();
 
 // #include "linpack.c"		
 #include "whetstone.c"
+#include "stream.c"
 
 #define _printf(...) fprintf(stderr, __VA_ARGS__);
 
@@ -55,12 +56,13 @@ int main(int argc, char**argv)
   t0 = time(NULL);
   print_timeofday();
   _printf("hello world!\n");
-  
+
   // udp_server();
   udp_client();
   // tcp_client();
   // tcp_server();
   // linpack_main();
+  stream_main();
   whetstone_main();
 
   _printf("Bye\n");
