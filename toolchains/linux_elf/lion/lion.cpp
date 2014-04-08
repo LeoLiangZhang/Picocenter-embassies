@@ -57,13 +57,13 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
-  // udp_server();
-  udp_client();
+  udp_server();
+  // udp_client();
   // tcp_client();
   // tcp_server();
   // linpack_main();
-  stream_main();
-  whetstone_main();
+  // stream_main();
+  // whetstone_main();
 
   _printf("Bye\n");
   _printf("time: %ld s\n", time(NULL)-t0);
