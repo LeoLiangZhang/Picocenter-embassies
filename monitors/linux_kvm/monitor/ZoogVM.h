@@ -115,6 +115,11 @@ public:
 	void request_coredump();
 	CallCounts* get_call_counts() { return &call_counts; }
 
+
+	// liang: ZoogVM checkpoint and restore
+	void checkpoint(FILE *fp);
+
+
 #if DBG_SEND_FAILURE
 	FILE *dbg_send_log_fp;
 #endif // DBG_SEND_FAILURE

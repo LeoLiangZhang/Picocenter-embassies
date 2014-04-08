@@ -20,7 +20,7 @@ void tcp_server();
 
 // #include "linpack.c"		
 #include "whetstone.c"
-#include "stream.c"
+// #include "stream.c"
 
 #define _printf(...) fprintf(stderr, __VA_ARGS__);
 
@@ -44,6 +44,17 @@ void print_timeofday()
 //   return t;
 // }
 
+// This funciton is used to test checkpointing
+void timer()
+{
+  int seconds = 0;
+  while(1){
+    _printf("Uptime in seconds: %d \n", seconds);
+    sleep(1);
+    seconds++;
+  }
+}
+
 int main(int argc, char**argv)
 {
   
@@ -57,7 +68,8 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
-  udp_server();
+  timer();
+  // udp_server();
   // udp_client();
   // tcp_client();
   // tcp_server();

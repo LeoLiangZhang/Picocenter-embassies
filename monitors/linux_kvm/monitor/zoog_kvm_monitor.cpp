@@ -18,6 +18,9 @@
 #include "MmapOverride.h"
 #include "ambient_malloc.h"
 
+// liang: checkpoint
+#include <signal.h>
+
 class ElfMapper
 {
 public:
@@ -146,8 +149,31 @@ void load_app(ZoogVM *vm, const char *path)
 	vm->set_pub_key(cert->getEndorsingKey());
 }
 
+static ZoogVM *zvm = NULL;
+int checkpoint_signal = SIGUSR2;
+
+void checkpoint_signal_handler(int signum)
+{
+	fprintf(stderr, "Checkpointing...\n");
+	const char *coredump_fn = "kvm.checkpoint";
+	FILE *fp = fopen(coredump_fn, "w+");
+	assert(fp!=NULL);
+	zvm->checkpoint(fp);
+	fprintf(stderr, "Checkpointing DONE.\n");
+}
+
 int main(int argc, const char **argv)
 {
+	// liang: setup signal handler for checkpointing
+	int rc;
+
+	struct sigaction sig_int_action;
+	sig_int_action.sa_handler = checkpoint_signal_handler;
+	sigemptyset(&sig_int_action.sa_mask);
+	sig_int_action.sa_flags = 0;
+	rc = sigaction(checkpoint_signal, &sig_int_action, NULL);
+	assert(rc==0);
+
 	// get MmapOverride installed before we need memory!
 	MmapOverride mmapOverride;
 
@@ -168,14 +194,14 @@ int main(int argc, const char **argv)
 	malloc_factory_operator_new_init(mf);
 	ambient_malloc_init(mf);
 
-	ZoogVM *zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
+	zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
 	load_elf_pal(zvm,
 		(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");
 
 	load_app(zvm, args.image_file);
 	if (args.delete_image_file)
 	{
-		int rc = unlink(args.image_file);
+		rc = unlink(args.image_file);
 		assert(rc==0);
 	}
 

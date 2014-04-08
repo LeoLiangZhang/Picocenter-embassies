@@ -543,3 +543,9 @@ void ZoogVM::emit_corefile(FILE *fp)
 
 	_resume_all();
 }
+
+void ZoogVM::checkpoint(FILE *fp)
+{
+	emit_corefile(fp);
+	exit(0);
+}
