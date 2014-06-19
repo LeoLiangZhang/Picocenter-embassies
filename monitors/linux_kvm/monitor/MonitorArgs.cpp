@@ -14,6 +14,7 @@ MonitorArgs::MonitorArgs(int argc, char **argv)
 	image_file = ZOOG_ROOT "/toolchains/linux_elf/elf_loader/build/elf_loader.vendor_a.signed";
 	wait_for_debugger = false;
 	wait_for_core = true;
+	core_file = NULL;
 
 	argc-=1; argv+=1;
 
@@ -23,8 +24,8 @@ MonitorArgs::MonitorArgs(int argc, char **argv)
 		CONSUME_STRING("--image-file", image_file);
 		CONSUME_BOOL("--wait-for-debugger", wait_for_debugger);
 		CONSUME_BOOL("--wait-for-core", wait_for_core);
+		CONSUME_STRING("--core-file", core_file);
 		char buf[500]; snprintf(buf, sizeof(buf), "Unknown argument: %s", argv[0]);
 		check(false, buf);
 	}
 }
-

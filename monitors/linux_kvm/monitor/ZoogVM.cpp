@@ -34,7 +34,7 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	guest_memory_allocator = new CoalescingAllocator(sf, true);
 	net_buffer_table = new NetBufferTable(this, sf);
 	zutex_table = new ZutexTable(mf, sf, this);
-	
+
 	linked_list_init(&vcpus, mf);
 	vcpu_pool = new VCPUPool(this);
 	pub_key = NULL;
@@ -533,8 +533,12 @@ void ZoogVM::emit_corefile(FILE *fp)
 		slot != NULL;
 		slot = (MemSlot*) guest_memory_allocator->next_range(this_range, &this_range))
 	{
+		fprintf(stderr, "liang: get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
+			slot->get_guest_addr(), (int)slot->get_host_addr(), slot->get_size());
 		corefile_add_segment(&c, slot->get_guest_addr(), slot->get_host_addr(), slot->get_size());
 	}
+	fprintf(stderr, "liang: get_guest_app_code_start=%x, dbg_bootblock_path=%s\n",
+		(int)get_guest_app_code_start(), dbg_bootblock_path);
 	corefile_set_bootblock_info(&c, get_guest_app_code_start(), dbg_bootblock_path);
 
 	corefile_write(fp, &c);
@@ -548,4 +552,19 @@ void ZoogVM::checkpoint(FILE *fp)
 {
 	emit_corefile(fp);
 	exit(0);
+}
+
+void ZoogVM::resume(FILE *fp)
+{
+	CoreFile c;
+	int rc; 
+	// corefile_read(fp, &c);
+
+	Elf32_Ehdr ehdr;
+	rc = fread(&ehdr, sizeof(Elf32_Ehdr), 1, fp);
+	lite_assert(rc == 1);
+
+	Elf32_Phdr phdr;
+	
+
 }

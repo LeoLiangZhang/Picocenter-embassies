@@ -22,11 +22,12 @@
 class MonitorArgs {
 public:
 	MonitorArgs(int argc, char **argv);
-	
+
 	bool delete_image_file;
 	const char *image_file;
 	bool wait_for_debugger;
 	bool wait_for_core;
 		// on catastrophe, if true, waits to produce core;
 		// if false, no core; noninteractive exit
+	const char *core_file;
 };

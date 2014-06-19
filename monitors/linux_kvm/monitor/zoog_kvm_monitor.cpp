@@ -127,7 +127,7 @@ void load_elf_pal(ZoogVM *vm, char *path)
 	FILE *fp = fopen("debug_mmap", "w");
 	fprintf(fp, "P %s %08x\n", path, em_load.get_pseudo_load_address(mapped_base));
 	fclose(fp);
-	
+
 	free(mem_image);
 }
 
@@ -195,17 +195,25 @@ int main(int argc, const char **argv)
 	ambient_malloc_init(mf);
 
 	zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
-	load_elf_pal(zvm,
-		(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");
 
-	load_app(zvm, args.image_file);
-	if (args.delete_image_file)
+	// liang: resume process
+	if (args.core_file)
 	{
-		rc = unlink(args.image_file);
-		assert(rc==0);
-	}
+		FILE *fp = fopen(args.core_file, "r");
+		assert(fp!=NULL);
+		zvm.resume(fp);
+	} else {
+		load_elf_pal(zvm,
+			(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");
 
-	zvm->start();
+		load_app(zvm, args.image_file);
+		if (args.delete_image_file)
+		{
+			rc = unlink(args.image_file);
+			assert(rc==0);
+		}
+		zvm->start();
+	}
 }
 
 uint32_t getCurrentTime() {

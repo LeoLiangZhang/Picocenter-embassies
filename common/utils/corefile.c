@@ -28,13 +28,13 @@ void corefile_init(CoreFile *c, MallocFactory *mf)
 
 void corefile_add_thread(CoreFile *c, Core_x86_registers *regs, int thread_id)
 {
-	CoreNote_Regs *note_regs = mf_malloc(c->mf, sizeof(CoreNote_Regs)); 
+	CoreNote_Regs *note_regs = mf_malloc(c->mf, sizeof(CoreNote_Regs));
 
 	lite_memset(note_regs, 0, sizeof(*note_regs));
 	note_regs->note.nhdr.n_namesz = 5;
 	note_regs->note.nhdr.n_descsz = sizeof(CoreNote_Regs) - sizeof(NoteHeader);
 	note_regs->note.nhdr.n_type = NT_PRSTATUS;
-	//strcpy(note_regs.name, "CORE"); 
+	//strcpy(note_regs.name, "CORE");
 	// Avoid VS warning that strcpy is unsafe
 	note_regs->note.name[0] = 'C';
 	note_regs->note.name[1] = 'O';
@@ -81,6 +81,20 @@ int _corefile_ftell_callback(void *user_file_obj)
 	return ftell(fp);
 }
 
+bool _corefile_fread_callback(void *user_file_obj, void *ptr, int len)
+{
+	FILE *fp = (FILE*) user_file_obj;
+	int rc = fread(ptr, len, 1, fp);
+	return rc==1;
+}
+
+bool _corefile_fseek_callback(void *user_file_obj, long offset, int whence)
+{
+	FILE *fp = (FILE*) user_file_obj;
+	int rc = fseek(fp, offset, whence);
+	return rc==0;
+}
+
 void corefile_write(FILE *fp, CoreFile *c)
 {
 	corefile_write_custom(c, _corefile_fwrite_callback, _corefile_ftell_callback, fp);
@@ -108,7 +122,7 @@ void corefile_write_custom(CoreFile *c, write_callback_func *write_func, tell_ca
 	int pad_i;
 	int hdr_offset = 0;
 	bool rc;
-	Elf32_Ehdr ehdr;	
+	Elf32_Ehdr ehdr;
 
 	int thread_notes_size = c->threads.count * sizeof(CoreNote_Regs);
 
@@ -134,7 +148,7 @@ void corefile_write_custom(CoreFile *c, write_callback_func *write_func, tell_ca
 	ehdr.e_ident[EI_VERSION] = EV_CURRENT;
 	ehdr.e_ident[EI_OSABI] = ELFOSABI_NONE;
 	ehdr.e_ident[EI_ABIVERSION] = 0;
-	
+
 	for (pad_i=EI_PAD; pad_i<EI_NIDENT; pad_i++)
 	{
 		ehdr.e_ident[pad_i] = 0;
@@ -185,7 +199,7 @@ void corefile_write_custom(CoreFile *c, write_callback_func *write_func, tell_ca
 
 		Elf32_Phdr phdr;
 		lite_assert((seg->size & 0xfff) == 0);
-		
+
 		phdr.p_type = PT_LOAD;
 		phdr.p_flags = PF_X|PF_W|PF_R;
 		phdr.p_offset = seg_file_offset;
@@ -243,4 +257,14 @@ void corefile_write_custom(CoreFile *c, write_callback_func *write_func, tell_ca
 		lite_assert(ftell_func==NULL || seg_file_offset == (*ftell_func)(user_file_obj));
 	}
 }
+
+
+void corefile_read_custom(CoreFile *c, read_callback_func *read_func, seek_callback_func *seek_func, void *user_file_obj)
+{
+	int rc;
+
+	Elf32_Ehdr ehdr;
+
+}
+
 

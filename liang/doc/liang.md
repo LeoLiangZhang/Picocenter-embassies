@@ -34,10 +34,14 @@ ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./
 
 ## run without *schroot*
 
+### BUILD
+
+#### KVM
 schroot -d ~/Works/embassies/monitors/linux_kvm/monitor/ -- make
 schroot -d ~/Works/embassies/monitors/linux_kvm/coordinator/ -- make
 schroot -d ~/Works/embassies/monitors/linux_kvm/ -- make
 
+#### DBG
 schroot -d ~/Works/embassies/monitors/linux_dbg/monitor/ -- make
 schroot -d ~/Works/embassies/monitors/linux_dbg/pal/ -- make
 schroot -d ~/Works/embassies/monitors/linux_dbg/ -- make
@@ -60,4 +64,7 @@ schroot -- bash -c "export DISPLAY=$DISPLAY ; cd ~/Works/embassies/ && ZOOG_TUNI
 
 schroot -- bash -c "cd ~/Works/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false"
 
+## Checkpointing
+
+pkill --signal SIGUSR2 'zoog_kvm_mon'
 

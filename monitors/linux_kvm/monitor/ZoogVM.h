@@ -118,6 +118,7 @@ public:
 
 	// liang: ZoogVM checkpoint and restore
 	void checkpoint(FILE *fp);
+	void resume(FILE *fp);
 
 
 #if DBG_SEND_FAILURE
@@ -176,4 +177,3 @@ private:
 	void _pause_all();
 	void _resume_all();
 };
-
