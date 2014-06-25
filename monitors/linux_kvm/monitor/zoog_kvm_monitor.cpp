@@ -199,9 +199,10 @@ int main(int argc, const char **argv)
 	// liang: resume process
 	if (args.core_file)
 	{
+		fprintf(stderr, "Resume from core file: %s\n", args.core_file);
 		FILE *fp = fopen(args.core_file, "r");
 		assert(fp!=NULL);
-		zvm.resume(fp);
+		zvm->resume(fp);
 	} else {
 		load_elf_pal(zvm,
 			(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");

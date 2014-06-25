@@ -46,15 +46,16 @@ void corefile_set_bootblock_info(CoreFile *c, void *bootblock_addr, const char *
 
 typedef bool (write_callback_func)(void *user_file_obj, void *ptr, int len);
 typedef bool (read_callback_func)(void *user_file_obj, void *ptr, int len);
-// typedef int (tell_callback_func)(void *user_file_obj);
-// typedef bool (seek_callback_func)(void *user_file_obj, long offset, int whence);
+typedef int (tell_callback_func)(void *user_file_obj);
+typedef bool (seek_callback_func)(void *user_file_obj, long offset, int whence);
 void corefile_write_custom(CoreFile *c, write_callback_func *write_func, tell_callback_func *optional_tell_func, void *user_file_obj);
-// void corefile_read_custom(CoreFile *c, read_callback_func *read_func, seek_callback_func *seek_func, void *user_file_obj)
+void corefile_read_custom(CoreFile *c, read_callback_func *read_func, seek_callback_func *seek_func, void *user_file_obj);
 
 uint32_t corefile_compute_size(CoreFile *c);
 
 #if USE_FILE_IO
 void corefile_write(FILE *fp, CoreFile *c);
+void corefile_read(FILE *fp, CoreFile *c);
 #endif // USE_FILE_IO
 
 #ifdef __cplusplus

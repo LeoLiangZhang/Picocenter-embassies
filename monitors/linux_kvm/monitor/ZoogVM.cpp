@@ -533,8 +533,9 @@ void ZoogVM::emit_corefile(FILE *fp)
 		slot != NULL;
 		slot = (MemSlot*) guest_memory_allocator->next_range(this_range, &this_range))
 	{
-		fprintf(stderr, "liang: get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
-			slot->get_guest_addr(), (int)slot->get_host_addr(), slot->get_size());
+		fprintf(stderr, "liang: [LABEL:%s] get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
+			slot->get_dbg_label(), slot->get_guest_addr(), 
+			(int)slot->get_host_addr(), slot->get_size());
 		corefile_add_segment(&c, slot->get_guest_addr(), slot->get_host_addr(), slot->get_size());
 	}
 	fprintf(stderr, "liang: get_guest_app_code_start=%x, dbg_bootblock_path=%s\n",
@@ -556,15 +557,58 @@ void ZoogVM::checkpoint(FILE *fp)
 
 void ZoogVM::resume(FILE *fp)
 {
-	CoreFile c;
-	int rc; 
+	// CoreFile c;
 	// corefile_read(fp, &c);
+	int rc; 
+	int pos = 0; // track the last phdr was read
+	int i;
+	int num_notes = 1;
+	int thread_notes_size;
+	int thread_start;
+	static const char *label = "";
 
 	Elf32_Ehdr ehdr;
 	rc = fread(&ehdr, sizeof(Elf32_Ehdr), 1, fp);
 	lite_assert(rc == 1);
+	pos += sizeof(ehdr);
+	lite_assert(pos == ftell(fp));
 
+	// Read CoreNotes
 	Elf32_Phdr phdr;
-	
+	rc = fread(&phdr, sizeof(Elf32_Phdr), 1, fp);
+	lite_assert(rc == 1);
+	pos += sizeof(phdr);
+	lite_assert(pos == ftell(fp));
+	thread_notes_size = phdr.p_filesz - sizeof(CoreNote_Zoog);
+	thread_offset = phdr.p_offset;
+
+
+	for (i = 0; i < ehdr.e_phnum - num_notes; i++)
+	{
+		rc = fread(&phdr, sizeof(Elf32_Phdr), 1, fp);
+		lite_assert(rc == 1);
+		pos += sizeof(phdr);
+		lite_assert(pos == ftell(fp));
+		
+		{
+			uint32_t size = phdr.p_memsz;
+			uint8_t buf[size];
+			fseek(fp, phdr.offset, SEEK_SET);
+			fread(buf, size, 1, fp);
+			lite_assert((phdr.offset + size) == ftell(fp));
+			// haven't set phdr.p_vaddr yet. 
+			// TODO: modify allocate_guest_memory and guest_memory_allocator->allocate_range
+			map_image(buf, size, label);
+			fseek(fp, pos, SEEK_SET);
+		}
+
+	}
+
+	while (pos < thread_offset + thread_notes_size)
+	{
+		CoreNote_Regs corenote_regs;
+		rc = fread(&corenote_regs, sizeof(CoreNote_Regs), 1, fp);
+		ZoogVCPU *vcpu = new ZoogVCPU(corenote_regs.ip, corenote_regs.sp);
+	}
 
 }

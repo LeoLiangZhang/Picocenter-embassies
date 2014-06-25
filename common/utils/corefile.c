@@ -99,6 +99,11 @@ void corefile_write(FILE *fp, CoreFile *c)
 {
 	corefile_write_custom(c, _corefile_fwrite_callback, _corefile_ftell_callback, fp);
 }
+
+void corefile_read(FILE *fp, CoreFile *c)
+{
+	corefile_read_custom(c, _corefile_fread_callback, _corefile_fseek_callback, fp);
+}
 #endif // USE_FILE_IO
 
 bool _corefile_size_counter_cb(void *user_file_obj, void *ptr, int len)
@@ -264,7 +269,16 @@ void corefile_read_custom(CoreFile *c, read_callback_func *read_func, seek_callb
 	int rc;
 
 	Elf32_Ehdr ehdr;
+	rc = (*read_func)(user_file_obj, &ehdr, sizeof(ehdr));
+	lite_assert(rc);
 
+	
 }
+
+
+
+
+
+
 
 
