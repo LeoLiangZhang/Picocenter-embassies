@@ -564,7 +564,7 @@ void ZoogVM::resume(FILE *fp)
 	int i;
 	int num_notes = 1;
 	int thread_notes_size;
-	int thread_start;
+	int thread_offset;
 	static const char *label = "";
 
 	Elf32_Ehdr ehdr;
@@ -593,9 +593,9 @@ void ZoogVM::resume(FILE *fp)
 		{
 			uint32_t size = phdr.p_memsz;
 			uint8_t buf[size];
-			fseek(fp, phdr.offset, SEEK_SET);
+			fseek(fp, phdr.p_offset, SEEK_SET);
 			fread(buf, size, 1, fp);
-			lite_assert((phdr.offset + size) == ftell(fp));
+			lite_assert((int)(phdr.p_offset + size) == ftell(fp));
 			// haven't set phdr.p_vaddr yet. 
 			// TODO: modify allocate_guest_memory and guest_memory_allocator->allocate_range
 			map_image(buf, size, label);
@@ -608,7 +608,8 @@ void ZoogVM::resume(FILE *fp)
 	{
 		CoreNote_Regs corenote_regs;
 		rc = fread(&corenote_regs, sizeof(CoreNote_Regs), 1, fp);
-		ZoogVCPU *vcpu = new ZoogVCPU(corenote_regs.ip, corenote_regs.sp);
+		ZoogVCPU *vcpu = new ZoogVCPU(this, corenote_regs.desc.regs.ip, corenote_regs.desc.regs.sp);
+		vcpu->get_zid();
 	}
 
 }
