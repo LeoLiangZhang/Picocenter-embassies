@@ -260,6 +260,47 @@ bool CoalescingAllocator::allocate_range(uint32_t size, UserObjIfc *user_obj, Ra
 	return result;
 }
 
+bool CoalescingAllocator::allocate_range_at(uint32_t guest_addr, uint32_t size, UserObjIfc *user_obj, Range *out_range)
+{
+	// liang: This method supposes to be called at start, resuming from a swap off state.
+
+	if (size==0)
+	{
+		return false;
+	}
+
+	mutex->lock();
+
+	bool result = false;
+
+	// liang: copy from ZoogVM.h
+	// TODO: fix memory allocation
+	static const uint32_t host_phys_memory_size = 3<<29;	// 1.5GB
+
+	
+	Range assigned_range(guest_addr, guest_addr+size);
+	Range consumed_range(assigned_range.start, assigned_range.start+size);
+	lite_assert(consumed_range.intersect(assigned_range).size()==size);
+	Range leftover_range(consumed_range.end, host_phys_memory_size);
+
+	RefcountedUserObj *refcounted_user_obj = new RefcountedUserObj(user_obj);
+	RangeByStartElt *user_range = new RangeByStartElt(
+		consumed_range, refcounted_user_obj);
+
+	allocated_tree->insert(user_range);
+
+	if (leftover_range.size()>0)
+	{
+		_create_empty_range_nolock(leftover_range);
+	}
+
+	*out_range = consumed_range;
+	result = true;
+
+	mutex->unlock();
+	return result;
+}
+
 UserObjIfc *CoalescingAllocator::lookup_value(uint32_t value, Range *out_range)
 {
 	Range req_range(value, value+1);

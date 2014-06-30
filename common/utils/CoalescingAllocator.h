@@ -146,6 +146,8 @@ public:
 		// asserts that the new range doesn't overlap any existing
 		// free or allocated range.
 	bool allocate_range(uint32_t size, UserObjIfc *user_obj, Range *out_range);
+	bool allocate_range_at(uint32_t guest_addr, uint32_t size, UserObjIfc *user_obj, Range *out_range);
+	
 		// returns false if no suitable range available.
 		// if it returns false, then user_obj is still owned by caller;
 		// otherwise, we accept responsibility to delete it once all
