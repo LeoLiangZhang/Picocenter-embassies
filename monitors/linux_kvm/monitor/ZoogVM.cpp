@@ -549,9 +549,45 @@ void ZoogVM::emit_corefile(FILE *fp)
 	_resume_all();
 }
 
-void ZoogVM::checkpoint(FILE *fp)
+void ZoogVM::emit_swapfile(FILE *fp)
 {
+	int rc; 
+	struct swap_file_header header;
+	struct swap_thread thread;
+
+	header.thread_count = vcpus.count;
+	rc = fwrite(&header, sizeof(header), 1, fp);
+
+	LinkedListIterator lli;
+	for (ll_start(&vcpus, &lli);
+		ll_has_more(&lli);
+		ll_advance(&lli))
+	{
+		ZoogVCPU *vcpu = (ZoogVCPU *) ll_read(&lli);
+		vcpu->get_swap_thread(&thread);
+		rc = fwrite(&thread, sizeof(thread), 1, fp);
+	}
+}
+
+void ZoogVM::checkpoint()
+{
+	fprintf(stderr, "Checkpointing...\n");
+	FILE *fp;
+
+	const char *corefile = "kvm.core";
+	const char *swapfile = "kvm.swap";
+
+	fp = fopen(corefile, "w+");
+	lite_assert(fp!=NULL);
 	emit_corefile(fp);
+	fclose(fp);
+	
+	fp = fopen(swapfile, "w+");
+	lite_assert(fp!=NULL);
+	emit_swapfile(fp);
+	fclose(fp);
+
+	fprintf(stderr, "Checkpointing DONE.\n");
 	exit(0);
 }
 

@@ -994,6 +994,29 @@ void ZoogVCPU::get_registers(Core_x86_registers *core_regs)
 	printf("Control registers: CR0=%llx, CR2=%llx, CR3=%llx, CR4=%llx, CR8=%llx, efer=%llx\n", sregs.cr0, sregs.cr2, sregs.cr3, sregs.cr4, sregs.cr8, sregs.efer);
 }
 
+void ZoogVCPU::get_swap_thread(struct swap_thread *thread)
+{
+	int rc;
+	struct kvm_regs regs;
+	struct kvm_sregs sregs;
+	
+	if (vcpu_allocation==NULL)
+	{
+		regs = snap_regs;
+		sregs = snap_sregs;
+	}
+	else
+	{
+		rc = ioctl(vcpufd(), KVM_GET_REGS, &regs);
+		assert(rc==0);
+		rc = ioctl(vcpufd(), KVM_GET_SREGS, &sregs);
+		assert(rc==0);
+	}
+
+	thread->regs = regs;
+	thread->sregs = sregs;
+}
+
 bool ZoogVCPU::vcpu_held()
 {
 	return (vcpu_allocation != NULL);

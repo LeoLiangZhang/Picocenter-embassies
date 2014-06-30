@@ -28,6 +28,8 @@
 #include "NetBuffer.h"
 #include "VCPUYieldControlIfc.h"
 
+#include "coreswap.h"
+
 class ZoogVM;
 
 class ZoogVCPU
@@ -48,6 +50,7 @@ public:
 	void pause();
 	void resume();
 	void get_registers(Core_x86_registers *regs);
+	void get_swap_thread(struct swap_thread *thread);
 
 	int get_zid() { return zid; }
 		// Just an identifier, used to label these things in debug output,

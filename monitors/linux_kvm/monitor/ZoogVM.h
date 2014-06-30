@@ -36,6 +36,8 @@
 #include "MonitorCrypto.h"
 #include "CallCounts.h"
 
+#include "coreswap.h"
+
 class MemSlot;
 class ZoogVCPU;
 class VCPUPool;
@@ -108,6 +110,7 @@ public:
 		{ return mf; }
 
 	void emit_corefile(FILE *fp);
+	void emit_swapfile(FILE *fp);
 
 	void destroy();
 
@@ -117,7 +120,7 @@ public:
 
 
 	// liang: ZoogVM checkpoint and restore
-	void checkpoint(FILE *fp);
+	void checkpoint();
 	void resume(FILE *fp);
 
 

@@ -154,12 +154,7 @@ int checkpoint_signal = SIGUSR2;
 
 void checkpoint_signal_handler(int signum)
 {
-	fprintf(stderr, "Checkpointing...\n");
-	const char *coredump_fn = "kvm.checkpoint";
-	FILE *fp = fopen(coredump_fn, "w+");
-	assert(fp!=NULL);
-	zvm->checkpoint(fp);
-	fprintf(stderr, "Checkpointing DONE.\n");
+	zvm->checkpoint();
 }
 
 int main(int argc, const char **argv)
