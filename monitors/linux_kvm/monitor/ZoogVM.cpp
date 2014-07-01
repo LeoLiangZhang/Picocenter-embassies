@@ -61,6 +61,50 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	memset(idt_page->get_host_addr(), 0, idt_page->get_size());
 }
 
+ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file)
+	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
+{
+	fprintf(stderr, "Resume from core file: %s\n", core_file);
+
+	this->mf = mf;
+	this->sf = new SyncFactory_Pthreads();
+	this->mmapOverride = mmapOverride;
+	this->wait_for_core = wait_for_core;
+	this->mutex = sf->new_mutex(false);
+	this->memory_map_mutex = sf->new_mutex(false);
+	guest_memory_allocator = new CoalescingAllocator(sf, true);
+	net_buffer_table = new NetBufferTable(this, sf);
+	zutex_table = new ZutexTable(mf, sf, this);
+
+	linked_list_init(&vcpus, mf);
+	vcpu_pool = new VCPUPool(this);
+	pub_key = NULL;
+	guest_app_code_start = NULL;
+
+#if DBG_SEND_FAILURE
+	dbg_send_log_fp = fopen("monitor_send_log", "w");
+#endif // DBG_SEND_FAILURE
+
+	_setup();
+	resume();
+
+	// Need guest memory allocator available to allocate alarms page
+	// liang: resume would do 
+	// host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
+		// we keep a handle to this page to keep client from deallocating
+		// it, and causing us to later deref invalid memory.
+		// TODO I guess we should do the same for the call page, huh?
+	host_alarms = new HostAlarms(zutex_table, host_alarms_page);
+	alarm_thread = new AlarmThread(host_alarms);
+
+	TunIDAllocator* tunid = new TunIDAllocator();
+	coordinator = new CoordinatorConnection(mf, sf, tunid, host_alarms);
+
+	// liang: resume would do
+	// idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
+	// memset(idt_page->get_host_addr(), 0, idt_page->get_size());
+}
+
 struct idt_table_entry {
 	uint16_t offset_hi;
 	uint16_t flags;
@@ -129,7 +173,7 @@ void ZoogVM::_map_physical_memory()
 	}
 }
 
-void ZoogVM::_setup()
+void ZoogVM::_setup_kvm()
 {
 	int rc;
 
@@ -185,6 +229,11 @@ void ZoogVM::_setup()
 
 	rc = ioctl(kvmfd, KVM_CHECK_EXTENSION, KVM_CAP_DESTROY_MEMORY_REGION_WORKS);
 	lite_assert(rc>0);
+}
+
+void ZoogVM::_setup()
+{
+	_setup_kvm();
 
 	_map_physical_memory();
 
@@ -556,6 +605,8 @@ void ZoogVM::emit_swapfile(FILE *fp)
 	struct swap_thread thread;
 
 	header.thread_count = vcpus.count;
+	header.vm.host_alarms_page_guest_addr = host_alarms_page->get_guest_addr();
+	header.vm.idt_page_guest_addr = idt_page->get_guest_addr();
 	rc = fwrite(&header, sizeof(header), 1, fp);
 
 	LinkedListIterator lli;
@@ -571,11 +622,11 @@ void ZoogVM::emit_swapfile(FILE *fp)
 
 void ZoogVM::checkpoint()
 {
-	fprintf(stderr, "Checkpointing...\n");
-	FILE *fp;
-
 	const char *corefile = "kvm.core";
 	const char *swapfile = "kvm.swap";
+
+	fprintf(stderr, "Checkpointing...\n");
+	FILE *fp;
 
 	fp = fopen(corefile, "w+");
 	lite_assert(fp!=NULL);
@@ -591,17 +642,37 @@ void ZoogVM::checkpoint()
 	exit(0);
 }
 
-void ZoogVM::resume(FILE *fp)
+void ZoogVM::resume()
 {
+	const char *corefile = "kvm.core";
+	const char *swapfile = "kvm.swap";
+
+
+	FILE *fp = fopen(corefile, "r");
+	lite_assert(fp!=NULL);
+
+	FILE *fp_swap = fopen(swapfile, "r");
+	lite_assert(fp!=NULL);
+
 	// CoreFile c;
 	// corefile_read(fp, &c);
 	int rc; 
 	int pos = 0; // track the last phdr was read
-	int i;
+	int i, j;
 	int num_notes = 1;
 	int thread_notes_size;
 	int thread_offset;
 	static const char *label = "";
+
+	struct swap_file_header header;
+
+	rc = fread(&header, sizeof(header), 1, fp_swap);
+	uint8_t buf[header.thread_count * sizeof(struct swap_thread_extra)];
+	struct swap_thread_extra *ptr_thread = (struct swap_thread_extra *)buf;
+	for (i = 0; i < (int)header.thread_count; i ++) {
+		rc = fread(ptr_thread+i, sizeof(struct swap_vm), 1, fp_swap);
+	}
+
 
 	Elf32_Ehdr ehdr;
 	rc = fread(&ehdr, sizeof(Elf32_Ehdr), 1, fp);
@@ -634,18 +705,55 @@ void ZoogVM::resume(FILE *fp)
 			lite_assert((int)(phdr.p_offset + size) == ftell(fp));
 			// haven't set phdr.p_vaddr yet. 
 			// TODO: modify allocate_guest_memory and guest_memory_allocator->allocate_range
-			map_image(buf, size, label);
+			// map_image(buf, size, label);
+
+			MemSlot *mem_slot = new MemSlot(label);
+			Range guest_range;
+			uint32_t round_size = size;
+			guest_memory_allocator->allocate_range_at(phdr.p_vaddr, round_size, mem_slot, &guest_range);
+			uint8_t *host_addr = host_phys_memory + guest_range.start;
+			mem_slot->configure(guest_range, host_addr);
+			void *mmap_rc = mmap(host_addr, round_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+			lite_assert(mmap_rc == host_addr);
+
+			// liang TODO: improve efficiency 
+			if(guest_range.start == header.vm.host_alarms_page_guest_addr) {
+				host_alarms_page = mem_slot;
+			} else if (guest_range.start == header.vm.idt_page_guest_addr) {
+				idt_page = mem_slot;
+			} else {
+				// linear search :(
+				for(j = 0; j < (int)header.thread_count; j++){
+					if ((ptr_thread+j)->thread.gdt_page_guest_addr == guest_range.start) {
+						ptr_thread->gdt_page = mem_slot;
+					}
+				}
+			}
+
 			fseek(fp, pos, SEEK_SET);
 		}
 
 	}
+	lite_assert(host_alarms_page != NULL);
+	lite_assert(idt_page != NULL);
 
-	while (pos < thread_offset + thread_notes_size)
-	{
-		CoreNote_Regs corenote_regs;
-		rc = fread(&corenote_regs, sizeof(CoreNote_Regs), 1, fp);
-		ZoogVCPU *vcpu = new ZoogVCPU(this, corenote_regs.desc.regs.ip, corenote_regs.desc.regs.sp);
-		vcpu->get_zid();
+	// while (pos < thread_offset + thread_notes_size)
+	// {
+	// 	CoreNote_Regs corenote_regs;
+	// 	rc = fread(&corenote_regs, sizeof(CoreNote_Regs), 1, fp);
+	// 	ZoogVCPU *vcpu = new ZoogVCPU(this, corenote_regs.desc.regs.ip, corenote_regs.desc.regs.sp);
+	// 	vcpu->get_zid();
+	// }
+
+	struct swap_thread_extra *ptr;
+	for(ptr = ptr_thread; ptr < ptr_thread + header.thread_count; ptr++) {
+		ZoogVCPU *vcpu = new ZoogVCPU(this, ptr);
+		vcpu->get_zid(); 
+		lite_assert(ptr->gdt_page);
 	}
 
+	fclose(fp);
+	fclose(fp_swap);
+
+	_resume_all();
 }

@@ -62,6 +62,34 @@ ZoogVCPU::ZoogVCPU(ZoogVM *vm, uint32_t guest_entry_point, uint32_t stack_top_gu
 	_init(vm, guest_entry_point, stack_top_guest);
 }
 
+ZoogVCPU::ZoogVCPU(ZoogVM *vm, struct swap_thread_extra *thread)
+{
+	// resume
+	this->vm = vm;
+	this->snap_regs = thread->thread.regs;
+	this->snap_sregs = thread->thread.sregs;
+	this->guest_entry_point = thread->thread.guest_entry_point;
+	this->stack_top_guest = thread->thread.stack_top_guest;
+	this->thread_condemned = thread->thread.thread_condemned;
+	this->gdt_page = thread->gdt_page;
+	this->call_page = (ZoogKvmCallPage *) (gdt_page->get_host_addr() + 
+		sizeof(struct gdt_table_entry)*gdt_count);
+	this->call_page_capacity = this->call_page->capacity;
+	this->gdt_entries = (struct gdt_table_entry*) gdt_page->get_host_addr();
+
+	this->zid = vm->allocate_zid();
+	this->zutex_waiter = new ZutexWaiter(vm->get_malloc_factory(), vm->get_sync_factory(), this);
+
+	init_pause_controls();
+
+	vcpu_allocation = NULL;
+	vm->record_vcpu(this);
+
+	// pause on resume, call resume to continue
+	pause_control_flag = true;
+	pthread_create(&pt, NULL, zvcpu_thread_resume, this);
+}
+
 void ZoogVCPU::_init(ZoogVM *vm, uint32_t guest_entry_point, uint32_t stack_top_guest)
 {
 	this->vm = vm;
@@ -91,6 +119,12 @@ ZoogVCPU::~ZoogVCPU()
 void *ZoogVCPU::zvcpu_thread(void *obj)
 {
 	((ZoogVCPU*) obj)->run();
+	return NULL;
+}
+
+void *ZoogVCPU::zvcpu_thread_resume(void *obj)
+{
+	((ZoogVCPU*) obj)->service_loop();
 	return NULL;
 }
 
@@ -1015,6 +1049,10 @@ void ZoogVCPU::get_swap_thread(struct swap_thread *thread)
 
 	thread->regs = regs;
 	thread->sregs = sregs;
+	thread->guest_entry_point = guest_entry_point;
+	thread->stack_top_guest = stack_top_guest;
+	thread->thread_condemned = thread_condemned;
+	thread->gdt_page_guest_addr = gdt_page->get_guest_addr();
 }
 
 bool ZoogVCPU::vcpu_held()

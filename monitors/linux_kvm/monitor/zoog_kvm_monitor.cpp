@@ -189,16 +189,13 @@ int main(int argc, const char **argv)
 	malloc_factory_operator_new_init(mf);
 	ambient_malloc_init(mf);
 
-	zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
-
 	// liang: resume process
 	if (args.core_file)
 	{
-		fprintf(stderr, "Resume from core file: %s\n", args.core_file);
-		FILE *fp = fopen(args.core_file, "r");
-		assert(fp!=NULL);
-		zvm->resume(fp);
+		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core, args.core_file);
+		// zvm->resume();
 	} else {
+		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
 		load_elf_pal(zvm,
 			(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");
 

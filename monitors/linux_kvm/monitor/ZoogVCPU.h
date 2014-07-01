@@ -45,6 +45,9 @@ public:
 		// bootstrap thread, which calls PAL to allocate further memory;
 		// the PAL call requires a stack.
 
+	ZoogVCPU(ZoogVM *vm, struct swap_thread_extra *thread);
+		// resume from saved state
+
 	~ZoogVCPU();
 
 	void pause();
@@ -107,6 +110,7 @@ private:
 	void kablooey(bool wait_patiently);
 
 	static void *zvcpu_thread(void *obj);
+	static void *zvcpu_thread_resume(void *obj);
 	void _init(ZoogVM *vm, uint32_t guest_entry_point, uint32_t stack_top_guest);
 	void run();
 	void service_loop();

@@ -46,6 +46,9 @@ class ZoogVM : public MemoryMapIfc {
 public:
 	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core);
 
+	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file);
+		// for resuming
+
 	uint32_t map_image(uint8_t *image, uint32_t size, const char *dbg_label);
 		// returns guest address of loaded section
 	void map_app_code(uint8_t *image, uint32_t size, const char *dbg_bootblock_path);
@@ -121,7 +124,7 @@ public:
 
 	// liang: ZoogVM checkpoint and restore
 	void checkpoint();
-	void resume(FILE *fp);
+	void resume();
 
 
 #if DBG_SEND_FAILURE
@@ -175,6 +178,7 @@ private:
 
 	// private functions
 
+	void _setup_kvm();
 	void _setup();
 	void _map_physical_memory();
 	void _pause_all();
