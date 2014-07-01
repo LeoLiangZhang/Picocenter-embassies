@@ -291,7 +291,7 @@ bool CoalescingAllocator::allocate_range_at(uint32_t guest_addr, uint32_t size, 
 
 	if (leftover_range.size()>0)
 	{
-		_create_empty_range_nolock(leftover_range);
+		// _create_empty_range_nolock(leftover_range);
 	}
 
 	*out_range = consumed_range;

@@ -70,6 +70,6 @@ pkill --signal SIGUSR2 'zoog_kvm_mon'
 
 ## Resume
 
-schroot -- bash -c "cd ~/Works/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --core-file kvm.checkpoint --wait-for-core false"
+schroot -- bash -c "cd ~/Works/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --core-file kvm.swap --wait-for-core false"
 
 wait-for-core: request coredump when error

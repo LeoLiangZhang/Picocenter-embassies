@@ -183,4 +183,6 @@ private:
 	void _map_physical_memory();
 	void _pause_all();
 	void _resume_all();
+
+	void _load_swap(const char *core_file);
 };

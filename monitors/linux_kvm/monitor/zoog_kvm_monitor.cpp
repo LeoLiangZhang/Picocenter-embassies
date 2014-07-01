@@ -193,7 +193,7 @@ int main(int argc, const char **argv)
 	if (args.core_file)
 	{
 		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core, args.core_file);
-		// zvm->resume();
+		zvm->resume();
 	} else {
 		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
 		load_elf_pal(zvm,
