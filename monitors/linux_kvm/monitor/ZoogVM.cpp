@@ -676,7 +676,7 @@ void ZoogVM::_load_swap(const char *core_file)
 	uint8_t buf[header.thread_count * sizeof(struct swap_thread_extra)];
 	struct swap_thread_extra *ptr_thread = (struct swap_thread_extra *)buf;
 	for (i = 0; i < (int)header.thread_count; i ++) {
-		rc = fread(ptr_thread+i, sizeof(struct swap_vm), 1, fp_swap);
+		rc = fread(ptr_thread+i, sizeof(struct swap_thread), 1, fp_swap);
 	}
 
 
@@ -731,7 +731,7 @@ void ZoogVM::_load_swap(const char *core_file)
 				// linear search :(
 				for(j = 0; j < (int)header.thread_count; j++){
 					if ((ptr_thread+j)->thread.gdt_page_guest_addr == guest_range.start) {
-						ptr_thread->gdt_page = mem_slot;
+						(ptr_thread+j)->gdt_page = mem_slot;
 					}
 				}
 			}
