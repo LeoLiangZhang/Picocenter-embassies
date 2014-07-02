@@ -645,6 +645,31 @@ void ZoogVM::checkpoint()
 void ZoogVM::resume()
 {
 	_resume_all();
+	while (1)
+	{
+		sleep(1);
+		if (coredump_request_flag)
+		{
+			while (true)
+			{
+				char buf[50];
+				fprintf(stderr, "Type \"core\" for corefile: ");
+				fflush(stderr);
+				char *s = fgets(buf, sizeof(buf), stdin);
+				if (s!=NULL && strcmp(s, "core\n")==0)
+				{
+					break;
+				}
+			}
+
+			const char *coredump_fn = "zvm.core";
+			FILE *fp = fopen(coredump_fn, "w");
+			emit_corefile(fp);
+			fclose(fp);
+			coredump_request_flag = false;
+			fprintf(stderr, "Dumped core to %s\n", coredump_fn);
+		}
+	}
 }
 
 void ZoogVM::_load_swap(const char *core_file)
@@ -753,6 +778,8 @@ void ZoogVM::_load_swap(const char *core_file)
 
 	struct swap_thread_extra *ptr;
 	for(ptr = ptr_thread; ptr < ptr_thread + header.thread_count; ptr++) {
+		fprintf(stderr, "Thread: guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
+			ptr->thread.thread.guest_entry_point, ptr->thread.stack_top_guest, ptr->thread.gdt_page_guest_addr);
 		ZoogVCPU *vcpu = new ZoogVCPU(this, ptr);
 		vcpu->get_zid(); 
 		lite_assert(ptr->gdt_page);

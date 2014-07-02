@@ -55,6 +55,18 @@ void timer()
   }
 }
 
+void loop()
+{
+  int counter = 0;
+  int loop = 0;
+  while (1){
+    _printf("counter=%d\n", counter);
+    while(loop++ < 1<<25);
+    loop = 0;
+    counter++;
+  }
+}
+
 int main(int argc, char**argv)
 {
   
@@ -68,7 +80,8 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
-  timer();
+  // timer();
+  loop();
   // udp_server();
   // udp_client();
   // tcp_client();
