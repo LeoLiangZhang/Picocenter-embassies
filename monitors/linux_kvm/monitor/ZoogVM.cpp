@@ -779,7 +779,7 @@ void ZoogVM::_load_swap(const char *core_file)
 	struct swap_thread_extra *ptr;
 	for(ptr = ptr_thread; ptr < ptr_thread + header.thread_count; ptr++) {
 		fprintf(stderr, "Thread: guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
-			ptr->thread.thread.guest_entry_point, ptr->thread.stack_top_guest, ptr->thread.gdt_page_guest_addr);
+			ptr->thread.guest_entry_point, ptr->thread.stack_top_guest, ptr->thread.gdt_page_guest_addr);
 		ZoogVCPU *vcpu = new ZoogVCPU(this, ptr);
 		vcpu->get_zid(); 
 		lite_assert(ptr->gdt_page);

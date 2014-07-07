@@ -7,7 +7,7 @@ ZutexTable::ZutexTable(MallocFactory *mf, SyncFactory *sf, MemoryMapIfc *memory_
 	this->mf = mf;
 	hash_table_init(&table, mf, ZutexQueue::hash, ZutexQueue::cmp);
 	mutex = sf->new_mutex(false);
-	this->memory_map = memory_map;
+	this->memory_map = memory_map; // liang comment: kvm/ZoogVM 
 #if DEBUG_DISASTER
 	dbg_sanity("ZutexTable ctor");
 #endif //DEBUG_DISASTER

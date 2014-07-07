@@ -663,6 +663,9 @@ void ZoogVCPU::send_net_buffer(xa_send_net_buffer *xa_guest)
 
 void ZoogVCPU::_free_net_buffer(NetBuffer* nb)
 {
+	// liang: dirty fix. NULL when resume.
+	if (nb == NULL) return;
+	
 	LongMessageAllocation* lma = nb->get_lma();
 	if (lma!=NULL)
 	{
