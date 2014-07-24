@@ -147,6 +147,7 @@ public:
 		// free or allocated range.
 	bool allocate_range(uint32_t size, UserObjIfc *user_obj, Range *out_range);
 	bool allocate_range_at(uint32_t guest_addr, uint32_t size, UserObjIfc *user_obj, Range *out_range);
+	void force_insert_coalesced_free_range(Range range);
 	
 		// returns false if no suitable range available.
 		// if it returns false, then user_obj is still owned by caller;

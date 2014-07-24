@@ -75,13 +75,13 @@ INCS=\
 
 CFLAGS=\
 	$(INCS) \
-	-O0 \
 	-DUSE_CPPSTDLIB=1 \
 	-fexceptions \
 	-march=native \
-#	-g \
-	#-O2 \
-	#-O3 \
+	-O2 \
+	-g \
+	# -O3 \
+	# -O0 \
 	#-march=pentium-m \
 	#-g \
 	#-fno-strict-aliasing \

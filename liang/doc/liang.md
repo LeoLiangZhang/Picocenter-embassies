@@ -73,3 +73,14 @@ pkill --signal SIGUSR2 'zoog_kvm_mon'
 schroot -- bash -c "cd ~/Works/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --core-file kvm.swap --wait-for-core false"
 
 wait-for-core: request coredump when error
+
+## GDB: debugging in chroot'ed env
+
+cd ~/Works/embassies/
+ZOOG_TUNID=2 gdb -c core --args ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --core-file kvm.swap --wait-for-core false
+
+
+## Find in source code (without toolchains/linux_elf/apps)
+
+find common monitors toolchains -path toolchains/linux_elf/apps -prune -o \( -name "*.[chS]" -o -name "*.cc" -o -name "*.cpp" \) -print |xargs grep -ine 'Packet invalid' 2>/dev/null
+

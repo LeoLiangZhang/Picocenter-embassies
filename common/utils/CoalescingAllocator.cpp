@@ -146,6 +146,12 @@ void CoalescingAllocator::_insert_coalesced_free_range(Range range)
 	lite_assert(rc);
 }
 
+void CoalescingAllocator::force_insert_coalesced_free_range(Range range)
+{
+	// liang: used in resuming from checkpoint
+	_insert_coalesced_free_range(range);
+}
+
 void CoalescingAllocator::_create_empty_range_nolock(Range new_range)
 {
 	// a failure would be
@@ -300,6 +306,8 @@ bool CoalescingAllocator::allocate_range_at(uint32_t guest_addr, uint32_t size, 
 	mutex->unlock();
 	return result;
 }
+
+
 
 UserObjIfc *CoalescingAllocator::lookup_value(uint32_t value, Range *out_range)
 {

@@ -44,7 +44,7 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	dbg_send_log_fp = fopen("monitor_send_log", "w");
 #endif // DBG_SEND_FAILURE
 
-	_setup();
+	_setup(false);
 
 	// Need guest memory allocator available to allocate alarms page
 	host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
@@ -64,6 +64,7 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
+	// resume from checkpoint
 	this->mf = mf;
 	this->sf = new SyncFactory_Pthreads();
 	this->mmapOverride = mmapOverride;
@@ -83,7 +84,8 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	dbg_send_log_fp = fopen("monitor_send_log", "w");
 #endif // DBG_SEND_FAILURE
 
-	_setup();
+	_setup(true);
+
 	_load_swap(core_file);
 
 	// Need guest memory allocator available to allocate alarms page
@@ -132,7 +134,7 @@ void ZoogVM::set_idt_handler(uint32_t target_address)
 	}
 }
 
-void ZoogVM::_map_physical_memory()
+void ZoogVM::_map_physical_memory(bool resume)
 {
 	// TODO Just use MAP_FIXED, and don't bother with the munmap. Problem solved.
 	/* TODO Ugh. We have a race condition where during our unmap/map to remap
@@ -154,7 +156,8 @@ void ZoogVM::_map_physical_memory()
 	lite_assert(host_phys_memory != MAP_FAILED);
 	lite_assert(host_phys_memory == desired_host_phys_addr);
 
-	guest_memory_allocator->create_empty_range(Range(0x10001000, host_phys_memory_size));
+	if(!resume)
+		guest_memory_allocator->create_empty_range(Range(0x10001000, host_phys_memory_size));
 
 	struct kvm_userspace_memory_region umr;
 	umr.slot = 0;
@@ -229,11 +232,11 @@ void ZoogVM::_setup_kvm()
 	lite_assert(rc>0);
 }
 
-void ZoogVM::_setup()
+void ZoogVM::_setup(bool resume)
 {
 	_setup_kvm();
 
-	_map_physical_memory();
+	_map_physical_memory(resume);
 
 	// For some reason, we need to allocate memory at page zero. I'm
 	// not at all sure why; I'd rather not! I guess we might be able
@@ -720,7 +723,7 @@ void ZoogVM::_load_swap(const char *core_file)
 	thread_notes_size = phdr.p_filesz - sizeof(CoreNote_Zoog);
 	thread_offset = phdr.p_offset;
 
-
+	uint32_t last_guest_range_end = 0x10001000; // the same as _map_physical_memory
 	for (i = 0; i < ehdr.e_phnum - num_notes; i++)
 	{
 		rc = fread(&phdr, sizeof(Elf32_Phdr), 1, fp);
@@ -761,9 +764,25 @@ void ZoogVM::_load_swap(const char *core_file)
 				}
 			}
 
+			// core dump memory pages should sort by start addresses
+			lite_assert(guest_range.start >= last_guest_range_end);
+			if (guest_range.start > last_guest_range_end) {
+				// there is a gap, let's make a free block
+				guest_memory_allocator->force_insert_coalesced_free_range(
+					Range(last_guest_range_end, guest_range.start));
+			}
+			last_guest_range_end = guest_range.end;
+
 			fseek(fp, pos, SEEK_SET);
 		}
 
+	}
+	if (last_guest_range_end < host_phys_memory_size){
+		// guest_memory_allocator->create_empty_range(
+		// 	Range(last_guest_range_end, host_phys_memory_size));
+		// liang: use this for performance, but it will not coalescing adjacent free blocks.
+		guest_memory_allocator->force_insert_coalesced_free_range(
+			Range(last_guest_range_end, host_phys_memory_size));
 	}
 	lite_assert(host_alarms_page != NULL);
 	lite_assert(idt_page != NULL);

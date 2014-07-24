@@ -52,6 +52,7 @@ void timer()
     _printf("Uptime in seconds: %d \n", seconds);
     sleep(1);
     seconds++;
+    _printf("malloc=%d\n", (unsigned int)malloc(4*1024*1024));
   }
 }
 
@@ -64,6 +65,22 @@ void loop()
     while(loop++ < 1<<25);
     loop = 0;
     counter++;
+  }
+}
+
+void loop_sec(int sec)
+{
+  clock_t t0, t1, delta = sec*1000000;
+  t0 = get_microsec();
+  while((t1 = get_microsec())-t0 < delta);
+}
+
+void loop2()
+{
+  int counter = 0;
+  while (1){
+    _printf("counter=%d\n", counter++);
+    loop_sec(1);
   }
 }
 
@@ -80,8 +97,9 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
-  // timer();
-  loop();
+  timer();
+  // loop();
+  // loop2();
   // udp_server();
   // udp_client();
   // tcp_client();
@@ -155,9 +173,10 @@ void udp_client()
   for(i = 0; i < count; i++) {
     sprintf(sendline, "#%d# Hello world!\n", i); 
     // disable printf while benchmarking
-    // _printf("Sending message: %s\n", sendline);
+    _printf("Sending message: %s\n", sendline);
     sendto(sockfd,sendline,strlen(sendline),0,
 	   (struct sockaddr *)&servaddr,sizeof(servaddr));
+    loop_sec(1);
 
   }
   c2 = clock();

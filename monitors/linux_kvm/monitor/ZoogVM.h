@@ -179,8 +179,8 @@ private:
 	// private functions
 
 	void _setup_kvm();
-	void _setup();
-	void _map_physical_memory();
+	void _setup(bool resume);
+	void _map_physical_memory(bool resume);
 	void _pause_all();
 	void _resume_all();
 
