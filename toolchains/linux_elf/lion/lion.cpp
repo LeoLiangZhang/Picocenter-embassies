@@ -97,11 +97,11 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
-  timer();
+  // timer();
   // loop();
   // loop2();
   // udp_server();
-  // udp_client();
+  udp_client();
   // tcp_client();
   // tcp_server();
   // linpack_main();
@@ -154,7 +154,7 @@ void udp_client()
   int count = 1000;
 
   n = 0, recvline[0] = 0;
-  strcpy(srv_ip, "10.1.0.1");
+  strcpy(srv_ip, "10.2.0.1");
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_DGRAM,0);
   if(sockfd < 0){

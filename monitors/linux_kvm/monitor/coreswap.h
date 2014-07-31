@@ -21,9 +21,13 @@ struct swap_thread_extra {
 struct swap_vm {
 	uint32_t host_alarms_page_guest_addr;
 	uint32_t idt_page_guest_addr;
+	uint32_t pub_key_size;
+	uint8_t pub_key_serialized[0]; // swap_vm.pub_key_size 
 };
 
 struct swap_file_header {
+	uint32_t swap_vm_size;
 	uint32_t thread_count;
-	struct swap_vm vm;	
+	struct swap_vm vm[0];
+	struct swap_thread threads[0]; // for ease of access 
 };

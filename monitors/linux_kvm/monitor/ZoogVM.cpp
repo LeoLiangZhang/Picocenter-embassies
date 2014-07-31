@@ -103,6 +103,11 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	// liang: _load_swap would do
 	// idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
 	// memset(idt_page->get_host_addr(), 0, idt_page->get_size());
+
+	// liang: reconnect coordinator
+	if(this->pub_key){
+		set_pub_key(this->pub_key);
+	}
 }
 
 struct idt_table_entry {
@@ -604,11 +609,20 @@ void ZoogVM::emit_swapfile(FILE *fp)
 	int rc; 
 	struct swap_file_header header;
 	struct swap_thread thread;
+	struct swap_vm vm;
 
 	header.thread_count = vcpus.count;
-	header.vm.host_alarms_page_guest_addr = host_alarms_page->get_guest_addr();
-	header.vm.idt_page_guest_addr = idt_page->get_guest_addr();
+	vm.host_alarms_page_guest_addr = host_alarms_page->get_guest_addr();
+	vm.idt_page_guest_addr = idt_page->get_guest_addr();
+	vm.pub_key_size = this->pub_key->size();
+	header.swap_vm_size = sizeof(vm) + vm.pub_key_size;
+
 	rc = fwrite(&header, sizeof(header), 1, fp);
+	rc = fwrite(&vm, sizeof(vm), 1, fp);
+	// save pub_key
+	uint8_t buffer[vm.pub_key_size];
+	this->pub_key->serialize(buffer);
+	rc = fwrite(buffer, vm.pub_key_size, 1, fp);
 
 	LinkedListIterator lli;
 	for (ll_start(&vcpus, &lli);
@@ -699,14 +713,24 @@ void ZoogVM::_load_swap(const char *core_file)
 	static const char *label = "";
 
 	struct swap_file_header header;
-
+	
+	// load header
 	rc = fread(&header, sizeof(header), 1, fp_swap);
+
+	// load swap_vm
+	uint8_t vm_buf[header.swap_vm_size];
+	rc = fread(vm_buf, header.swap_vm_size, 1, fp_swap);
+	struct swap_vm *vm = (struct swap_vm *)vm_buf;
+
+	// load pub_key
+	this->pub_key = new ZPubKey(vm->pub_key_serialized, vm->pub_key_size);
+
+	// load threads
 	uint8_t buf[header.thread_count * sizeof(struct swap_thread_extra)];
 	struct swap_thread_extra *ptr_thread = (struct swap_thread_extra *)buf;
 	for (i = 0; i < (int)header.thread_count; i ++) {
 		rc = fread(ptr_thread+i, sizeof(struct swap_thread), 1, fp_swap);
 	}
-
 
 	Elf32_Ehdr ehdr;
 	rc = fread(&ehdr, sizeof(Elf32_Ehdr), 1, fp);
@@ -751,9 +775,9 @@ void ZoogVM::_load_swap(const char *core_file)
 				mem_slot->get_guest_addr(), (int)mem_slot->get_host_addr(), mem_slot->get_size());
 
 			// liang TODO: improve efficiency 
-			if(guest_range.start == header.vm.host_alarms_page_guest_addr) {
+			if(guest_range.start == vm->host_alarms_page_guest_addr) {
 				host_alarms_page = mem_slot;
-			} else if (guest_range.start == header.vm.idt_page_guest_addr) {
+			} else if (guest_range.start == vm->idt_page_guest_addr) {
 				idt_page = mem_slot;
 			} else {
 				// linear search :(
