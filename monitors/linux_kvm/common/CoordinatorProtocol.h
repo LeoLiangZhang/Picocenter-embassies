@@ -60,6 +60,10 @@ typedef enum CoordinatorOpcode {
 	co_internal_failure_code,
 	co_alloc_long_message,
 	co_alloc_long_message_reply,
+
+	// liang: add reconnect code
+	co_reconnect, // use co_connect_complete as connection sucessful signal
+
 } CoordinatorOpcode;
 
 typedef struct {
@@ -72,6 +76,13 @@ typedef struct {
 	uint32_t pub_key_len;
 	ZPubKey pub_key[0];
 } CMConnect;
+
+typedef struct {
+	CMHeader hdr;
+	XIPifconfig ifconfigs[2];
+	uint32_t pub_key_len;
+	ZPubKey pub_key[0];
+} CMReconnect;
 
 typedef struct {
 	CMHeader hdr;

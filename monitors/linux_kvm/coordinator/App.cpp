@@ -29,12 +29,54 @@ App::App(Listener *listener, ZPubKey *pub_key, Message *connect_message, int tun
 	send_cm(&cmc.hdr, cmc.hdr.length);
 }
 
+App::App(Listener *listener, ZPubKey *pub_key, Message *connect_message, XIPifconfig *last_ifconfigs)
+{
+	// liang: reuse last IP
+	this->pub_key = pub_key;
+	this->listener = listener;
+	this->connect_message = connect_message;
+	this->destructing = false;
+	hash_table_init(&this->outstanding_lmas, standard_malloc_factory_init(),
+		LongMessageIdentifierIfc::hash, LongMessageIdentifierIfc::cmp);
+
+	// _create_ifconfig(ipv4, &ifconfigs[0], tunnel_address);
+	// _create_ifconfig(ipv6, &ifconfigs[1], tunnel_address);
+	this->ifconfigs[0] = last_ifconfigs[0];
+	this->ifconfigs[1] = last_ifconfigs[1];
+
+	// clean previous app on the same address
+	AppLink *app_link = listener->get_router()->get_app_link();
+	App *old_app = NULL;
+	for (int i=0; i<2; i++)
+	{
+		AppIfc key(*this->get_ip_addr(idx_to_XIPVer(i)));
+		AppIfc *app_ifc = app_link->lookup(key);
+		if (!app_ifc) continue;
+		if(old_app) lite_assert(old_app == app_ifc->get_app())
+		else old_app = app_ifc->get_app();
+	}
+	if(old_app){
+		listener->disconnect(old_app);
+	}
+
+	listener->get_router()->connect_app(this);
+
+	CMConnectComplete cmc;
+	cmc.hdr.length = sizeof(cmc);
+	cmc.hdr.opcode = co_connect_complete;
+	lite_assert(sizeof(ifconfigs)==sizeof(cmc.ifconfigs));
+	memcpy(cmc.ifconfigs, ifconfigs, sizeof(ifconfigs));
+	send_cm(&cmc.hdr, cmc.hdr.length);
+}
+
 void App::_create_ifconfig(XIPVer ipver, XIPifconfig *ifconfig, int tunnel_address)
 {
 	ifconfig->gateway = listener->get_router()->get_gateway(ipver);
 	ifconfig->netmask = listener->get_router()->get_netmask(ipver);
 	ifconfig->local_interface = listener->get_router()->get_gateway(ipver);
 
+	// liang: reading note
+	// this code only able to allocate ip address within 0-255 range
 	lite_assert((tunnel_address & ~0xff)==0);
 	switch (ipver)
 	{

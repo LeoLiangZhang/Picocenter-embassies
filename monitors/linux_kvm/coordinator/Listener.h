@@ -56,6 +56,7 @@ private:
 	App *msg_to_app(Message *msg);
 	void dispatch(Message *cm);
 	void connect(Message *cm, CMConnect *conn);
+	void reconnect(Message *msg, CMReconnect *conn);
 	void launch_application(CMLaunchApplication *la);
 	void free_long_message(Message *msg, CMFreeLongMessage * hdr);
 	void deliver_packet(Message *msg);

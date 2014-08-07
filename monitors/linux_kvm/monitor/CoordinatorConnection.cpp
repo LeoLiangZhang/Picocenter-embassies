@@ -47,7 +47,7 @@ CoordinatorConnection::CoordinatorConnection(
 	next_nonce = 7;
 }
 
-void CoordinatorConnection::connect(ZPubKey *pub_key)
+void CoordinatorConnection::make_connection()
 {
 	sock = socket(PF_UNIX, SOCK_DGRAM, 0);
 	lite_assert(sock>=0);
@@ -71,7 +71,12 @@ void CoordinatorConnection::connect(ZPubKey *pub_key)
 	struct sockaddr_un srcaddr;
 	rc = getsockname(sock, (struct sockaddr *) &srcaddr, sizeof(srcaddr));
 	lite_assert(rc==0);
-*/
+*/	
+}
+
+void CoordinatorConnection::connect(ZPubKey *pub_key)
+{
+	make_connection();
 
 	uint32_t msg_len = sizeof(CMConnect) + pub_key->size();
 	CMConnect *connect_msg = (CMConnect *) malloc(msg_len);
@@ -81,6 +86,24 @@ void CoordinatorConnection::connect(ZPubKey *pub_key)
 	pub_key->serialize((uint8_t*) connect_msg->pub_key);
 	_send(connect_msg, connect_msg->hdr.length);
 	free(connect_msg);
+
+	pthread_create(&recv_thread, NULL, _recv_thread, this);
+}
+
+void CoordinatorConnection::reconnect(ZPubKey *pub_key, XIPifconfig *ifconfigs)
+{
+	make_connection();
+
+	uint32_t msg_len = sizeof(CMReconnect) + pub_key->size();
+	CMReconnect *reconnect_msg = (CMReconnect *) malloc(msg_len);
+	reconnect_msg->hdr.length = msg_len;
+	reconnect_msg->hdr.opcode = co_reconnect;
+	reconnect_msg->ifconfigs[0] = ifconfigs[0];
+	reconnect_msg->ifconfigs[1] = ifconfigs[1];
+	reconnect_msg->pub_key_len = pub_key->size();
+	pub_key->serialize((uint8_t*) reconnect_msg->pub_key);
+	_send(reconnect_msg, reconnect_msg->hdr.length);
+	free(reconnect_msg);
 
 	pthread_create(&recv_thread, NULL, _recv_thread, this);
 }

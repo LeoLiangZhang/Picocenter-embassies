@@ -64,6 +64,7 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
+	// liang: swapon
 	// resume from checkpoint
 	this->mf = mf;
 	this->sf = new SyncFactory_Pthreads();
@@ -86,7 +87,8 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 
 	_setup(true);
 
-	_load_swap(core_file);
+	struct swap_vm *vm;
+	_load_swap(core_file, &vm);
 
 	// Need guest memory allocator available to allocate alarms page
 	// liang: resume would do 
@@ -106,8 +108,11 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 
 	// liang: reconnect coordinator
 	if(this->pub_key){
-		set_pub_key(this->pub_key);
+		// set_pub_key(this->pub_key);
+		resume_coordinator(this->pub_key, vm->ifconfigs);
 	}
+
+	delete vm;
 }
 
 struct idt_table_entry {
@@ -394,6 +399,14 @@ void ZoogVM::set_pub_key(ZPubKey *pub_key)
 	crypto.set_monitorKeyPair(kp);
 }
 
+void ZoogVM::resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs)
+{
+	this->pub_key = pub_key;
+	coordinator->reconnect(pub_key, ifconfigs);
+	ZKeyPair *kp = coordinator->send_get_monitor_key_pair();
+	crypto.set_monitorKeyPair(kp);
+}
+
 ZPubKey *ZoogVM::get_pub_key()
 {
 	return this->pub_key;
@@ -614,6 +627,10 @@ void ZoogVM::emit_swapfile(FILE *fp)
 	header.thread_count = vcpus.count;
 	vm.host_alarms_page_guest_addr = host_alarms_page->get_guest_addr();
 	vm.idt_page_guest_addr = idt_page->get_guest_addr();
+	int num_ifconfigs;
+	XIPifconfig *ifconfigs = coordinator->get_ifconfigs(&num_ifconfigs);
+	vm.ifconfigs[0] = ifconfigs[0];
+	vm.ifconfigs[1] = ifconfigs[1];
 	vm.pub_key_size = this->pub_key->size();
 	header.swap_vm_size = sizeof(vm) + vm.pub_key_size;
 
@@ -689,7 +706,7 @@ void ZoogVM::resume()
 	}
 }
 
-void ZoogVM::_load_swap(const char *core_file)
+void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 {
 	const char *corefile = "kvm.core";
 	const char *swapfile = "kvm.swap";
@@ -717,10 +734,11 @@ void ZoogVM::_load_swap(const char *core_file)
 	// load header
 	rc = fread(&header, sizeof(header), 1, fp_swap);
 
-	// load swap_vm
-	uint8_t vm_buf[header.swap_vm_size];
+	// load swap_vm, make sure free this memory
+	uint8_t *vm_buf = new uint8_t[header.swap_vm_size];//[header.swap_vm_size];
 	rc = fread(vm_buf, header.swap_vm_size, 1, fp_swap);
 	struct swap_vm *vm = (struct swap_vm *)vm_buf;
+	*out_vm = vm;
 
 	// load pub_key
 	this->pub_key = new ZPubKey(vm->pub_key_serialized, vm->pub_key_size);

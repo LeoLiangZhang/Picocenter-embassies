@@ -39,6 +39,8 @@ public:
 
 	void dbg_forwarding_table_print();
 
+	AppLink *get_app_link(){return app_link;}
+
 private:
 	void _create_forwarding_table();
 	void forwarding_table_add(NetIfc *ni);

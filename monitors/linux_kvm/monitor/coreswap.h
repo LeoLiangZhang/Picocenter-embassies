@@ -2,6 +2,7 @@
 
 #include <linux/kvm.h>
 #include "MemSlot.h"
+#include "pal_abi/pal_net.h"
 
 struct swap_thread {
 	struct kvm_regs regs;
@@ -21,6 +22,7 @@ struct swap_thread_extra {
 struct swap_vm {
 	uint32_t host_alarms_page_guest_addr;
 	uint32_t idt_page_guest_addr;
+	XIPifconfig ifconfigs[2];
 	uint32_t pub_key_size;
 	uint8_t pub_key_serialized[0]; // swap_vm.pub_key_size 
 };

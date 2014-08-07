@@ -77,6 +77,7 @@ private:
 //	void delegate_viewport_reply(CMDelegateViewportReply *dvr);
 //	void deliver_verify_label_reply();
 	void deliver_ui_event(CMDeliverUIEvent *du);
+	void make_connection();
 
 	RPCToken* rpc_start(
 		CMRPCHeader *req,
@@ -100,6 +101,7 @@ public:
 	~CoordinatorConnection();
 
 	void connect(ZPubKey *pub_key);
+	void reconnect(ZPubKey *pub_key, XIPifconfig *ifconfigs);
 	XIPifconfig *get_ifconfigs(int *out_count);
 	void send_packet(NetBuffer *nb);
 	Packet *dequeue_packet();

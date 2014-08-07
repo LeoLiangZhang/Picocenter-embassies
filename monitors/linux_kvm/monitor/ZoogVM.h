@@ -125,6 +125,7 @@ public:
 	// liang: ZoogVM checkpoint and restore
 	void checkpoint();
 	void resume();
+	void resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs);
 
 
 #if DBG_SEND_FAILURE
@@ -184,5 +185,5 @@ private:
 	void _pause_all();
 	void _resume_all();
 
-	void _load_swap(const char *core_file);
+	void _load_swap(const char *core_file, struct swap_vm **out_vm);
 };

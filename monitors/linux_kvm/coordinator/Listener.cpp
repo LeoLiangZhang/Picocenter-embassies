@@ -24,6 +24,9 @@ using namespace std;
 #include "BlitterViewport.h"
 #include "BlitterCanvas.h"
 
+// liang: for debugging
+#include "format_ip.h"
+
 #define MONITOR_PATH	ZOOG_ROOT "/monitors/linux_kvm/monitor/build/zoog_kvm_monitor"
 
 Listener::Listener(MallocFactory *mf)
@@ -146,9 +149,55 @@ void Listener::dispatch(Message *msg)
 	case co_alloc_long_message:
 		alloc_long_message(msg, (CMAllocLongMessage*) hdr);
 		break;
+	case co_reconnect:
+		reconnect(msg, (CMReconnect*) hdr);
+		break;
 	default:
 		lite_assert(false);
 	}
+}
+
+void Listener::reconnect(Message *msg, CMReconnect *conn)
+{
+	// liang: TODO
+	// fix id allocator later
+
+	// TunnelAddress *ta = new TunnelAddress();
+	// Range range;
+	// bool rc = tunnel_address_allocator->allocate_range(1, ta, &range);
+	// if (!rc)
+	// {
+	// 	delete ta;
+	// 	lite_assert(false);	// out of addresses
+	// 	// TODO signal app that it is screwed.
+	// 	return;
+	// }
+	SockaddrHashable *saddr = new SockaddrHashable(msg->get_remote_addr(), msg->get_remote_addr_len());
+	
+	// clean old stuff. unix socket endpoint change in every new connection. 
+	// so these code won't work.
+	
+	// fprintf(stderr, "Restart\n");
+	// char buf[msg->get_remote_addr_len()+1];
+	// memcpy(buf, msg->get_remote_addr(), msg->get_remote_addr_len());
+	// buf[msg->get_remote_addr_len()]='\0';
+	// fprintf(stderr, "msg_addr_len=%d, reconnect address: \n", msg->get_remote_addr_len());
+	// for(unsigned int i = 0; i < msg->get_remote_addr_len(); i++){
+	// 	fprintf(stderr, "%2x", buf[i]);
+	// }
+	// fprintf(stderr, "\n");
+	// if(sockaddr_to_app_table->lookup_left(saddr)){
+	// 	fprintf(stderr, "found old app\n");
+	// 	App *old_app = (App *)sockaddr_to_app_table->lookup_left(saddr);
+	// 	disconnect(old_app);
+	// }
+	
+	ZPubKey *pub_key = new ZPubKey((uint8_t*) &conn[1], conn->pub_key_len);
+	App *app = new App(this, pub_key, msg, conn->ifconfigs);
+	sockaddr_to_app_table->insert(saddr, app);
+
+	blitter_mgr->register_palifc(app);
+	blitter_mgr->new_toplevel_viewport(app->get_id());
 }
 
 void Listener::connect(Message *msg, CMConnect *conn)
@@ -407,6 +456,10 @@ void Listener::alloc_long_message(Message* msg, CMAllocLongMessage* hdr)
 
 void Listener::disconnect(App *app)
 {
+	char buf[200];
+	format_ip(buf, sizeof(buf), app->get_ip_addr(ipv4));
+	fprintf(stderr, "disconnect app %s\n", buf);
+
 	get_router()->disconnect_app(app);
 	sockaddr_to_app_table->remove_right(app);
 	blitter_mgr->unregister_palifc(app->as_palifc());

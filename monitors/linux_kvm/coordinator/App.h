@@ -61,6 +61,7 @@ private:
 
 public:
 	App(Listener *listener, ZPubKey *pub_key, Message *connect_message, int tunnel_address);
+	App(Listener *listener, ZPubKey *pub_key, Message *connect_message, XIPifconfig *last_ifconfigs);
 	~App();
 	void send_cm(CMHeader *header, uint32_t length);
 	void send_packet(Packet *p);
