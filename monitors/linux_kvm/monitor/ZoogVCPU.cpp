@@ -310,12 +310,27 @@ void ZoogVCPU::pause()
 	// routine. In that case, we don't bother sendig a kill; our
 	// setting pause_control_flag is enough to be certain that the
 	// thread won't stumble back into resuming the VCPU.
+	bool has_sent_kill = false;
+	int rc;
+	struct timespec abstime;
+	struct timeval now;
+	long us_to_wait = 100000L; // 0.1 sec
 	pthread_mutex_lock(&has_paused_mutex);
 	while (!is_paused_flag)
 	{
-		fprintf(stderr, "kill(%d)\n", my_thread_id);
-		kill(my_thread_id, SIGUSR1);
-		pthread_cond_wait(&has_paused_cond, &has_paused_mutex);
+		if (!has_sent_kill) {
+			fprintf(stderr, "kill(%d)\n", my_thread_id);
+			kill(my_thread_id, SIGUSR1);
+		}
+		gettimeofday(&now, NULL);
+		abstime.tv_sec = now.tv_sec;
+		abstime.tv_nsec = now.tv_usec + us_to_wait;
+		if(abstime.tv_nsec >= 1000000L){
+			abstime.tv_sec += abstime.tv_nsec/1000000L;
+			abstime.tv_nsec = abstime.tv_nsec % 1000000L;
+		}
+		abstime.tv_nsec *= 1000L;
+		rc = pthread_cond_timedwait(&has_paused_cond, &has_paused_mutex, &abstime);
 	}
 	pthread_mutex_unlock(&has_paused_mutex);
 }
