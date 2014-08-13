@@ -124,6 +124,7 @@ void *ZoogVCPU::zvcpu_thread(void *obj)
 
 void *ZoogVCPU::zvcpu_thread_resume(void *obj)
 {
+	((ZoogVCPU*) obj)->my_thread_id = syscall(__NR_gettid); //gettid();
 	((ZoogVCPU*) obj)->service_loop();
 	return NULL;
 }

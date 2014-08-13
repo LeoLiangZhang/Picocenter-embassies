@@ -22,6 +22,8 @@ struct swap_thread_extra {
 struct swap_vm {
 	uint32_t host_alarms_page_guest_addr;
 	uint32_t idt_page_guest_addr;
+	void *guest_app_code_start;
+	char dbg_bootblock_path[256]; // unix path length, should big enough
 	XIPifconfig ifconfigs[2];
 	uint32_t pub_key_size;
 	uint8_t pub_key_serialized[0]; // swap_vm.pub_key_size 

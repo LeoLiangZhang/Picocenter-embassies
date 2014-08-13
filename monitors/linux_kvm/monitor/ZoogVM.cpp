@@ -109,10 +109,10 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	// liang: reconnect coordinator
 	if(this->pub_key){
 		// set_pub_key(this->pub_key);
-		resume_coordinator(this->pub_key, vm->ifconfigs);
+		_resume_coordinator(this->pub_key, vm->ifconfigs);
 	}
 
-	delete vm;
+	delete vm; // make sure recycle it
 }
 
 struct idt_table_entry {
@@ -399,7 +399,7 @@ void ZoogVM::set_pub_key(ZPubKey *pub_key)
 	crypto.set_monitorKeyPair(kp);
 }
 
-void ZoogVM::resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs)
+void ZoogVM::_resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs)
 {
 	this->pub_key = pub_key;
 	coordinator->reconnect(pub_key, ifconfigs);
@@ -601,6 +601,42 @@ void ZoogVM::emit_corefile(FILE *fp)
 		slot != NULL;
 		slot = (MemSlot*) guest_memory_allocator->next_range(this_range, &this_range))
 	{
+		corefile_add_segment(&c, slot->get_guest_addr(), slot->get_host_addr(), slot->get_size());
+	}
+	corefile_set_bootblock_info(&c, get_guest_app_code_start(), dbg_bootblock_path);
+
+	corefile_write(fp, &c);
+
+	unlock_memory_map();
+
+	_resume_all();
+}
+
+void ZoogVM::_emit_corefile(FILE *fp)
+{
+	CoreFile c;
+	corefile_init(&c, mf);
+
+	fprintf(stderr, "Core includes %d threads\n", vcpus.count);
+	// Threads
+	LinkedListIterator lli;
+	for (ll_start(&vcpus, &lli);
+		ll_has_more(&lli);
+		ll_advance(&lli))
+	{
+		ZoogVCPU *vcpu = (ZoogVCPU *) ll_read(&lli);
+		Core_x86_registers regs;
+		vcpu->get_registers(&regs);
+		corefile_add_thread(&c, &regs, vcpu->get_zid());
+	}
+
+	// Memory
+	Range this_range;
+	MemSlot *slot;
+	for (slot = (MemSlot*) guest_memory_allocator->first_range(&this_range);
+		slot != NULL;
+		slot = (MemSlot*) guest_memory_allocator->next_range(this_range, &this_range))
+	{
 		fprintf(stderr, "liang: [LABEL:%s] get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
 			slot->get_dbg_label(), slot->get_guest_addr(), 
 			(int)slot->get_host_addr(), slot->get_size());
@@ -611,18 +647,17 @@ void ZoogVM::emit_corefile(FILE *fp)
 	corefile_set_bootblock_info(&c, get_guest_app_code_start(), dbg_bootblock_path);
 
 	corefile_write(fp, &c);
-
-	unlock_memory_map();
-
-	_resume_all();
 }
 
-void ZoogVM::emit_swapfile(FILE *fp)
+void ZoogVM::_emit_swapfile(FILE *fp)
 {
 	int rc; 
 	struct swap_file_header header;
 	struct swap_thread thread;
 	struct swap_vm vm;
+
+	vm.guest_app_code_start = guest_app_code_start;
+	strcpy(vm.dbg_bootblock_path, dbg_bootblock_path);
 
 	header.thread_count = vcpus.count;
 	vm.host_alarms_page_guest_addr = host_alarms_page->get_guest_addr();
@@ -662,16 +697,20 @@ void ZoogVM::checkpoint()
 	fprintf(stderr, "Checkpointing...\n");
 	FILE *fp;
 
+	_pause_all();
+	lock_memory_map();
+	
 	fp = fopen(corefile, "w+");
 	lite_assert(fp!=NULL);
-	emit_corefile(fp);
+	_emit_corefile(fp);
 	fclose(fp);
 	
 	fp = fopen(swapfile, "w+");
 	lite_assert(fp!=NULL);
-	emit_swapfile(fp);
+	_emit_swapfile(fp);
 	fclose(fp);
 
+	// unlock_memory_map();
 	fprintf(stderr, "Checkpointing DONE.\n");
 	exit(0);
 }
@@ -739,6 +778,9 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	rc = fread(vm_buf, header.swap_vm_size, 1, fp_swap);
 	struct swap_vm *vm = (struct swap_vm *)vm_buf;
 	*out_vm = vm;
+
+	this->guest_app_code_start = vm->guest_app_code_start;
+	this->dbg_bootblock_path = strdup(vm->dbg_bootblock_path);
 
 	// load pub_key
 	this->pub_key = new ZPubKey(vm->pub_key_serialized, vm->pub_key_size);

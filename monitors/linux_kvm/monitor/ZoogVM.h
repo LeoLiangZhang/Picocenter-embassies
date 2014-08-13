@@ -113,7 +113,6 @@ public:
 		{ return mf; }
 
 	void emit_corefile(FILE *fp);
-	void emit_swapfile(FILE *fp);
 
 	void destroy();
 
@@ -125,7 +124,7 @@ public:
 	// liang: ZoogVM checkpoint and restore
 	void checkpoint();
 	void resume();
-	void resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs);
+	
 
 
 #if DBG_SEND_FAILURE
@@ -184,6 +183,10 @@ private:
 	void _map_physical_memory(bool resume);
 	void _pause_all();
 	void _resume_all();
+	void _resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs);
+
+	void _emit_corefile(FILE *fp);
+	void _emit_swapfile(FILE *fp);
 
 	void _load_swap(const char *core_file, struct swap_vm **out_vm);
 };

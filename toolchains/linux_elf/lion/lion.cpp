@@ -10,6 +10,7 @@
 #include <time.h>
 #include <sys/times.h>
 #include <sys/time.h>
+#include <signal.h>  
 
 
 void print_hosts();
@@ -84,6 +85,21 @@ void loop2()
   }
 }
 
+volatile int countdown = 500;
+
+void alarm_handler(int sig)
+{
+  _printf("countdown=%d\n", countdown--);
+  alarm(1);
+}
+
+void test_alarm()
+{
+  signal(SIGALRM, alarm_handler); 
+  alarm(1);  
+  while(countdown) { sleep(1); }  
+}
+
 int main(int argc, char**argv)
 {
   
@@ -97,11 +113,12 @@ int main(int argc, char**argv)
   print_timeofday();
   _printf("hello world!\n");
 
+  // test_alarm();
   // timer();
   // loop();
   // loop2();
-  // udp_server();
-  udp_client();
+  udp_server();
+  // udp_client();
   // tcp_client();
   // tcp_server();
   // linpack_main();
@@ -176,8 +193,8 @@ void udp_client()
     _printf("Sending message: %s\n", sendline);
     sendto(sockfd,sendline,strlen(sendline),0,
 	   (struct sockaddr *)&servaddr,sizeof(servaddr));
-    loop_sec(1);
-
+    // loop_sec(1);
+    sleep(1);
   }
   c2 = clock();
   t2 = time(0);
@@ -204,7 +221,7 @@ void tcp_client()
   char recvline[1000];
 
   n = 0, recvline[0] = 0;
-  strcpy(srv_ip, "10.1.0.1");
+  strcpy(srv_ip, "10.2.0.1");
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_STREAM,0);
   if(sockfd < 0){
