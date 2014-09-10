@@ -61,6 +61,7 @@ int xi_shutdown(XaxPosixEmulation *xpe, int filenum, int how)
 {	ROUTE_FCN(as_socket()->shutdown, how); }
 
 #define SOCK_NONBLOCK (0x800)
+#define SOCK_CLOEXEC (0x80000)
 int _xi_socketset(XaxPosixEmulation *xpe, XaxVFSHandleTableIfc *xht, int domain, int type, int protocol, int *fds, int n)
 {
 	// TODO: expedient
@@ -68,6 +69,10 @@ int _xi_socketset(XaxPosixEmulation *xpe, XaxVFSHandleTableIfc *xht, int domain,
 	if ((type & SOCK_NONBLOCK) > 0) {
 		nonblock = true;
 		type &= ~SOCK_NONBLOCK;
+	}
+	// liang: remove SOCK_CLOEXEC flag, ignore it.
+	if ((type & SOCK_CLOEXEC) > 0) {
+		type &= ~SOCK_CLOEXEC;
 	}
 	char pathbuf[100];
 	pathbuf[0] = '\0';

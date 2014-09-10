@@ -396,6 +396,10 @@ int LWIPHandle::sendto(XfsErr *err, __const __ptr_t buf, size_t n, int flags, ZC
 
 int LWIPHandle::setsockopt(XfsErr *err, int level, int optname, const __ptr_t optval, socklen_t optlen)
 {
+
+	// liang: trying to fix Apache
+	fprintf(stderr, "[liang zguest] setsockopt: level=%d, optname=%d\n", level, optname);
+
 #if 0
 	LWIPHandle *lh = (LWIPHandle *) xh;
     int rc = lwip_setsockopt(lh->lwipfd, level, optname, optval, optlen);
@@ -412,6 +416,19 @@ int LWIPHandle::setsockopt(XfsErr *err, int level, int optname, const __ptr_t op
 		*err = XFS_NO_ERROR;
 		return 0;
 	}
+
+	// liang: try to fix
+	if(level == 1 && optname == 9){ // TCP_NODELAY
+		*err = XFS_NO_ERROR;
+		return 0;
+	}
+	if (level == 6 && optname == 9){
+		*err = XFS_NO_ERROR;
+		return 0; 
+	}
+	int rc = lwip_setsockopt(lwipfd, level, optname, optval, optlen);
+	*err = EXTRACT_LWIP_ERRNO_WHEN(rc<0);
+    return rc;
 
 	*err = (XfsErr) ENOSYS;
 	return -1;

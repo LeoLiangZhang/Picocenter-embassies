@@ -1235,7 +1235,7 @@ int xi_dup(XaxPosixEmulation *xpe, int fd)
 
 int xi_dup2(XaxPosixEmulation *xpe, int fd, int fd2)
 {
-	xax_unimpl_assert();
+	// xax_unimpl_assert();
 	return -ENOSYS;
 }
 
@@ -2099,6 +2099,10 @@ int xi_sched_yield(XaxPosixEmulation *xpe)
 
 int xi_getrlimit(XaxPosixEmulation *xpe, enum __rlimit_resource resource, struct rlimit *rlimits)
 {
+	char buf[1024];
+	cheesy_snprintf(buf, sizeof(buf),
+					"[liang posix-emu] xi_getrlimit: resource=%d\n", resource);
+	debug_logfile_append(xpe->zdt, "stderr", buf);
 	if (resource==RLIMIT_STACK)
 	{
 		// This is part of the fakeoutery against
@@ -2117,6 +2121,13 @@ int xi_getrlimit(XaxPosixEmulation *xpe, enum __rlimit_resource resource, struct
 		rlimits->rlim_cur = 0x800000;
 		rlimits->rlim_max = 0x800000;
 		return 0;
+	}
+	else if (resource==RLIMIT_NOFILE)
+	{
+		// liang: pull from linux, to accommodate nginx.
+		rlimits->rlim_cur = 1024;
+		rlimits->rlim_max = 1024;
+		return 0;	
 	}
 	else
 	{

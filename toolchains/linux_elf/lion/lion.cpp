@@ -100,6 +100,18 @@ void test_alarm()
   while(countdown) { sleep(1); }  
 }
 
+void test_file()
+{
+  FILE *f = fopen("/home/liang/Works/embassies/lion_test_write.txt", "w");
+  if (f == NULL) {
+    _printf("Error opening file. \n")
+    exit(1);
+  }
+  const char *text = "Hello World!";
+  fprintf(f, text);
+  fclose(f);
+}
+
 int main(int argc, char**argv)
 {
   
@@ -117,13 +129,14 @@ int main(int argc, char**argv)
   // timer();
   // loop();
   // loop2();
-  udp_server();
+  // udp_server();
   // udp_client();
   // tcp_client();
-  // tcp_server();
+  tcp_server();
   // linpack_main();
   // stream_main();
   // whetstone_main();
+  // test_file();
 
   _printf("Bye\n");
   _printf("time: %ld s\n", time(NULL)-t0);

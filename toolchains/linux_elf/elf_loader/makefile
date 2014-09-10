@@ -46,7 +46,9 @@ ZOOG_ROOT=../../..
 
 TARGETS=\
 	elf_loader.lion.signed \
-
+	elf_loader.apache.signed \
+	elf_loader.nginx.signed \
+	elf_loader.lighttpd.signed
 
 
 COMMON_UTILS_MODULE=$(ZOOG_ROOT)/common/utils/

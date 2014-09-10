@@ -25,6 +25,10 @@ TARGETS=\
 	getaddr.zguest \
 	gimp.zguest \
 	lion.zguest \
+	apache.zguest \
+	nginx.zguest \
+	lighttpd.zguest \
+
 
 LWIP_LIB_DIR=$(ZOOG_ROOT)/toolchains/linux_elf/lwip_lib
 FASTPATH_TEST_DIR=$(ZOOG_ROOT)/toolchains/linux_elf/fastpath_test
