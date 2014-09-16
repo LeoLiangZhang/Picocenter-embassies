@@ -1236,7 +1236,8 @@ int xi_dup(XaxPosixEmulation *xpe, int fd)
 int xi_dup2(XaxPosixEmulation *xpe, int fd, int fd2)
 {
 	// xax_unimpl_assert();
-	return -ENOSYS;
+	// return -ENOSYS;
+	return fd2;
 }
 
 int xi_fcntl(XaxPosixEmulation *xpe, int filenum, int cmd, long arg)
@@ -2422,6 +2423,9 @@ uint32_t xi_enosys(XaxPosixEmulation *xpe, uint32_t nr)
 	return -ENOSYS;
 }
 
+// liang: try to fix apache
+
+
 uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 {
 #define ARG1	(ur->arg1)
@@ -2431,7 +2435,13 @@ uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 #define ARG5	(ur->arg5)
 #define ARG6	(ur->arg6)
 
-	//strace_emit_call(&xpe->strace, ur);
+	char buf[1024];
+	int real_time_ms, user_time_ms;
+	(xpe->strace.time_ifc)(xpe->strace.time_obj, &real_time_ms, &user_time_ms);
+	cheesy_snprintf(buf, sizeof(buf),
+					"[liang posix-emu %10d] Making syscall: %d\n", real_time_ms, ur->syscall_number);
+	debug_logfile_append(xpe->zdt, "strace", buf);
+
 	UserRegs ur_strace_copy = *ur;
 
 	uint32_t rc;
@@ -2711,7 +2721,7 @@ uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 
 	case __NR_setitimer:
 	case __NR_sched_getaffinity:
-	case __NR_ipc:
+	// case __NR_ipc:
 #ifdef __NR_inotify_init1
 	case __NR_inotify_init1:
 #endif // __NR_inotify_init1
@@ -2766,11 +2776,27 @@ uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 		xi_xe_mark_perf_point(xpe, (const char *) ARG1);
 		rc = 0;
 		break;
+
+	// liang: try to fix apache
+	// case 190://__NR_semget:
+	// 	// xi_semget(xpe, (int) ARG1, (int) ARG2, (int) ARG3);
+	// 	rc = 98307;
+	// 	break;
+	// case 191://__NR_semctl:
+	// 	rc = 0;
+	// 	break;
+	// case 193://__NR_semop:
+	// 	rc = 0;
+	// 	break;
+	case __NR_ipc:
+		rc = 0;
+		break;
+
 	default:
 		INVOKE_DEBUGGER_RAW();
 		rc = -ENOSYS;
 		break;
-		lite_assert(0);
+		// lite_assert(0);
 	}
 
 	if (xpe->strace_flag)

@@ -64,6 +64,13 @@ schroot -- bash -c "export DISPLAY=$DISPLAY ; cd ~/Works/embassies/ && ZOOG_TUNI
 
 schroot -- bash -c "cd ~/Works/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false"
 
+
+### elasticity 
+
+schroot -- bash -c "export DISPLAY=$DISPLAY ; cd /elasticity/embassies/monitors/linux_kvm/ && ZOOG_TUNID=2 ./coordinator/build/zoog_kvm_coordinator"
+
+schroot -- bash -c "export DISPLAY=$DISPLAY ; cd /elasticity/embassies/ && ZOOG_TUNID=2 ./toolchains/linux_elf/zftp_backend/build/zftp_backend --origin-filesystem true --origin-reference true --listen-zftp tunid --listen-lookup tunid --index-dir zftp_index_originb"
+
 ## Checkpointing
 
 pkill --signal SIGUSR2 'zoog_kvm_mon'
@@ -96,4 +103,16 @@ In `/common/utils/`
 
 - hash_table.h
 - linked_list.c
+
+
+
+- check lwip version
+- what need to be change for server side apps
+- 2:30p sync up
+
+
+# HTTPD compiliation
+
+(squeeze_i386)liang@neutron:httpd-2.0.65$ LDFLAGS=-pie ./configure --prefix=/home/liang/Works/embassies/toolchains/linux_elf/apache --enable-cache --enable-mem-cache
+
 
