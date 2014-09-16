@@ -19,7 +19,7 @@ cache_path = sys.argv[3]
 if (os.path.exists(cache_path)):
 	shutil.copy(cache_path, destination_path)
 else:
-	p = subprocess.Popen(["wget", "-O", destination_path, origin_url])
+	p = subprocess.Popen(["wget", "--no-check-certificate", "-O", destination_path, origin_url])
 	p.wait()
 
 # touch file's mtime to ensure it appears fresh
