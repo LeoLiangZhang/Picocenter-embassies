@@ -71,6 +71,8 @@ schroot -- bash -c "export DISPLAY=$DISPLAY ; cd /elasticity/embassies/monitors/
 
 schroot -- bash -c "export DISPLAY=$DISPLAY ; cd /elasticity/embassies/ && ZOOG_TUNID=2 ./toolchains/linux_elf/zftp_backend/build/zftp_backend --origin-filesystem true --origin-reference true --listen-zftp tunid --listen-lookup tunid --index-dir zftp_index_originb"
 
+schroot -- bash -c "cd /elasticity/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false"
+
 ## Checkpointing
 
 pkill --signal SIGUSR2 'zoog_kvm_mon'

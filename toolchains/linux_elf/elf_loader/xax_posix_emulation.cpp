@@ -56,11 +56,23 @@ uint32_t _get_gs_descriptor_idx(void);
 static int fake_times(struct tms *buffer);
 static void strace_time_ifc(void *v_this, int* out_real_ms, int* out_user_ms);
 
+
+// liang: enable select debug
+#define DEBUG_SELECT
+
+// liang: hack for debug_write_sync
+XaxPosixEmulation *my_xpe;
+void debug_write_sync(const char *buf)
+{
+	debug_logfile_append(my_xpe->zdt, "stderr", buf);
+}
+
 void xpe_init(XaxPosixEmulation *xpe, ZoogDispatchTable_v1 *zdt, uint32_t stack_base, StartupContextFactory *scf)
 {
 	fake_ids_init(&xpe->fake_ids);
 
 	xpe->zdt = zdt;
+	my_xpe = xpe;
 
 	// Using cheesy_malloc because libc malloc depends
 	// on a sane TLS (%gs) pointer, which not all of our
@@ -1030,7 +1042,7 @@ int xi_select(XaxPosixEmulation *xpe, int nfds, fd_set *readfds, fd_set *writefd
 			break;
 		}
 
-#if DEBUG_SELECT
+#ifdef DEBUG_SELECT
 		{
 			char buf[100];
 			strcpy(buf, "xi_select: releases ");
@@ -1039,18 +1051,18 @@ int xi_select(XaxPosixEmulation *xpe, int nfds, fd_set *readfds, fd_set *writefd
 			v[0] = display[sel.map[ready_idx].dbg_channel & 0x0f];
 			v[1] = ' ';
 			v[1] = '\0';
-			strcat(buf, v);
+			lite_strcat(buf, v);
 			char hexbuf[15];
 			hexlong(hexbuf, fd);
-			strcat(buf, hexbuf);
-			strcat(buf, "!\n");
+			lite_strcat(buf, hexbuf);
+			lite_strcat(buf, "!\n");
 			debug_write_sync(buf);
 		}
 #endif // DEBUG_SELECT
 	}
 	else
 	{
-#if DEBUG_SELECT
+#ifdef DEBUG_SELECT
 		debug_write_sync("select timeout\n");
 #endif // DEBUG_SELECT
 	}
@@ -1121,14 +1133,14 @@ int xi_poll(XaxPosixEmulation *xpe, struct pollfd *fds, nfds_t nfds, int timeout
 	if (filenum >= 0)
 	{
 		fds[filenum].revents |= sel.map[ready_idx].poll_mask;
-#if DEBUG_SELECT
+#ifdef DEBUG_SELECT
 		debug_write_sync("poll releases fd\n");
 #endif // DEBUG_SELECT
 		ret = 1;
 	}
 	else
 	{
-#if DEBUG_SELECT
+#ifdef DEBUG_SELECT
 		debug_write_sync("poll timeout\n");
 		ret = 0;
 #endif // DEBUG_SELECT
@@ -2423,9 +2435,6 @@ uint32_t xi_enosys(XaxPosixEmulation *xpe, uint32_t nr)
 	return -ENOSYS;
 }
 
-// liang: try to fix apache
-
-
 uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 {
 #define ARG1	(ur->arg1)
@@ -2435,6 +2444,7 @@ uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 #define ARG5	(ur->arg5)
 #define ARG6	(ur->arg6)
 
+	// liang: try to fix apache
 	char buf[1024];
 	int real_time_ms, user_time_ms;
 	(xpe->strace.time_ifc)(xpe->strace.time_obj, &real_time_ms, &user_time_ms);
