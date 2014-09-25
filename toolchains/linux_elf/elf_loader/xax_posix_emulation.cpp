@@ -1120,7 +1120,8 @@ int xi_poll(XaxPosixEmulation *xpe, struct pollfd *fds, nfds_t nfds, int timeout
 		fds[fdi].revents = 0;
 	}
 
-	TimeoutManager timeout_manager;
+	TimeoutManager timeout_manager; 
+	// timeout_ms = 2; // liang: hacky fix for apache
 	init_timeout_manager_ms(xpe, &timeout_manager, timeout_ms);
 	timeout_manager_apply(&timeout_manager, &sel);
 	lite_assert(sel.producer_count < sel.max_producers);
