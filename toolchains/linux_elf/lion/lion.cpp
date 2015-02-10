@@ -19,9 +19,10 @@ void udp_server();
 void tcp_client();
 void tcp_server();
 
-// #include "linpack.c"		
+#include "linpack.c"		
 #include "whetstone.c"
-// #include "stream.c"
+#include "stream.c"
+#include "exp_epoll.c"
 
 #define _printf(...) fprintf(stderr, __VA_ARGS__);
 
@@ -53,7 +54,7 @@ void timer()
     _printf("Uptime in seconds: %d \n", seconds);
     sleep(1);
     seconds++;
-    _printf("malloc=%d\n", (unsigned int)malloc(4*1024*1024));
+    // _printf("malloc=%d\n", (unsigned int)malloc(4*1024*1024));
   }
 }
 
@@ -132,11 +133,12 @@ int main(int argc, char**argv)
   // udp_server();
   // udp_client();
   // tcp_client();
-  tcp_server();
+  // tcp_server();
   // linpack_main();
   // stream_main();
   // whetstone_main();
   // test_file();
+  epoll_main(argc, argv);
 
   _printf("Bye\n");
   _printf("time: %ld s\n", time(NULL)-t0);
@@ -207,7 +209,7 @@ void udp_client()
     sendto(sockfd,sendline,strlen(sendline),0,
 	   (struct sockaddr *)&servaddr,sizeof(servaddr));
     // loop_sec(1);
-    sleep(1);
+    // sleep(1);
   }
   c2 = clock();
   t2 = time(0);

@@ -22,6 +22,8 @@
 #include <asm/ldt.h>		// struct user_desc
 #include <dirent.h>			// struct dirent
 
+#include <sys/epoll.h>		// liang: for epoll
+
 #include "LiteLib.h"
 #include "xax_posix_emulation.h"
 #include "handle_table.h"
@@ -1152,6 +1154,179 @@ fail:
 	free_timeout_manager(&timeout_manager);
 	return ret;
 }
+
+// liang: implement epoll
+typedef struct
+{
+	int fd;
+	struct epoll_event event;	
+} EpollRequest;
+
+typedef struct 
+{
+	int epfd;
+	int requests_count;
+	int requests_size;
+	EpollRequest *requests;
+} EpfdTuple;
+
+#define EPFD_TUPLE_LIST_DEFAULT_SIZE 10
+#define EPOLL_REQUESTS_DEFAULT_SIZE 8
+int epfd_tuple_list_size = EPFD_TUPLE_LIST_DEFAULT_SIZE;
+int epfd_tuple_list_count = 0;
+EpfdTuple epfd_tuple_list[EPFD_TUPLE_LIST_DEFAULT_SIZE];
+
+int xi_epoll_create1(XaxPosixEmulation *xpe, int flags)
+{
+    if (epfd_tuple_list_count < epfd_tuple_list_size) 
+    {
+    	EpfdTuple *et = epfd_tuple_list + epfd_tuple_list_count;
+    	et->epfd = xpe->handle_table->allocate_filenum();
+    	et->requests_count = 0;
+    	et->requests_size = EPOLL_REQUESTS_DEFAULT_SIZE;
+    	et->requests = (EpollRequest *)cheesy_malloc(&xpe->zmf.cheesy_arena, sizeof(EpollRequest)*et->requests_size);
+    	epfd_tuple_list_count += 1;
+    	return et->epfd;
+    }
+    return -ENOSYS;
+}
+
+int xi_epoll_ctl(XaxPosixEmulation *xpe, int epfd, int op, int fd, struct epoll_event *event)
+{
+	int i;
+	if (op == EPOLL_CTL_ADD) {
+		for (i = 0; i < epfd_tuple_list_count; i++)
+		{
+			EpfdTuple *et = epfd_tuple_list + i;
+			if (et->epfd == epfd)
+			{
+				if (et->requests_count < et->requests_size) 
+				{
+					EpollRequest *er = &et->requests[et->requests_count];
+					er->fd = fd;
+					er->event = *event; // TODO: check events is EPOLLET; We only support edge triggering.
+					et->requests_count += 1;
+					return 0;
+				} else {
+					// TODO: enlarge requests size
+					return -ENOMEM;
+				}
+			}
+		}
+	} else {
+#ifdef DEBUG_SELECT
+		debug_write_sync("epoll_ctl unsupport op.\n");
+#endif // DEBUG_SELECT
+	}
+	return -ENOSYS;
+}
+
+int xi_epoll_check_channel(XaxPosixEmulation *xpe, Selectinator *sel, 
+							int poll_mask, ZASChannel channel, 
+							int fdi, EpfdTuple *et)
+{
+	EpollRequest *er = et->requests + fdi;
+	if ((er->event.events & poll_mask) != 0)
+	{
+		int filenum = er->fd;
+		XVFSHandleWrapper *wrapper = xpe->handle_table->lookup(filenum);
+		if (wrapper == NULL)
+		{
+			return -EBADF;
+		}
+		ZAS *zas = wrapper->get_zas(channel);
+		sel->producers[sel->producer_count] = zas;
+		sel->map[sel->producer_count].fdi = fdi;
+		sel->map[sel->producer_count].poll_mask = poll_mask;
+		sel->map[sel->producer_count].dbg_channel = channel;
+		sel->producer_count+=1;
+	}
+	return 0;
+}
+
+int xi_epoll_pwait(XaxPosixEmulation *xpe, int epfd, struct epoll_event *events,
+                   int maxevents, int timeout,
+                   const sigset_t *sigmask)
+{
+	if (maxevents < 1) 
+		return -EINVAL;
+
+	int i;
+	EpfdTuple *et = NULL;
+	for (i = 0; i < epfd_tuple_list_count; i++)
+	{
+		if (epfd_tuple_list[i].epfd == epfd)
+		{
+			et = epfd_tuple_list + i;
+			break;
+		}
+	}
+	if (et == NULL)
+		return -EBADF;
+
+    Selectinator sel;
+    int nfds = et->requests_count;
+    xi_init_selectinator(&xpe->zmf.cheesy_arena, &sel, 3*nfds+1);
+    // The reason for 3*nfds+1 slots is the +1 slot is reserved for timer.
+    // See timeout_manager_apply
+	int ret = 0;
+    int fdi;
+    for (fdi=0; fdi<nfds; fdi++)
+	{
+		ret = xi_epoll_check_channel(xpe, &sel, EPOLLIN, zas_read, fdi, et);
+		if (ret!=0) { goto fail; }
+		ret = xi_epoll_check_channel(xpe, &sel, EPOLLOUT, zas_write, fdi, et);
+		if (ret!=0) { goto fail; }
+		ret = xi_epoll_check_channel(xpe, &sel, EPOLLERR, zas_except, fdi, et);
+		if (ret!=0) { goto fail; }
+	}
+
+	TimeoutManager timeout_manager; 
+	init_timeout_manager_ms(xpe, &timeout_manager, timeout);
+	timeout_manager_apply(&timeout_manager, &sel);
+	lite_assert(sel.producer_count < sel.max_producers);
+
+	int ready_idx;
+	ready_idx = zas_wait_any(xpe->zdt, sel.producers, sel.producer_count);
+
+	fdi = sel.map[ready_idx].fdi;
+	if (fdi >= 0)
+	{
+		events[0].events |= sel.map[ready_idx].poll_mask;
+		events[0].data.fd = et->requests[fdi].fd;;
+#ifdef DEBUG_SELECT
+		debug_write_sync("epoll releases fd\n");
+#endif // DEBUG_SELECT
+		ret = 1;
+	}
+	else
+	{
+#ifdef DEBUG_SELECT
+		debug_write_sync("epoll timeout\n");
+		ret = 0;
+#endif // DEBUG_SELECT
+	}
+
+fail:
+	xi_free_selectinator(xpe, &sel);
+	free_timeout_manager(&timeout_manager);
+	return ret;
+}
+
+// these two are special cases of the general ones
+int xi_epoll_create(XaxPosixEmulation *xpe, int size)
+{
+	// lite_assert(false);
+	return xi_epoll_create1(xpe, 0);
+}
+
+int xi_epoll_wait(XaxPosixEmulation *xpe, int epfd, struct epoll_event *events,
+                      int maxevents, int timeout)
+{
+	// lite_assert(false);
+	return xi_epoll_pwait(xpe, epfd, events, maxevents, timeout, NULL);
+}
+// liang: end epoll
 
 int xi_nanosleep(XaxPosixEmulation *xpe, const struct timespec *req, struct timespec *rem)
 {
@@ -2502,6 +2677,24 @@ uint32_t xpe_dispatch(XaxPosixEmulation *xpe, UserRegs *ur)
 	case __NR_poll:
 		rc = xi_poll(xpe, (struct pollfd *) ARG1, (nfds_t) ARG2, (int) ARG3);
 		break;
+
+	// liang: epoll
+	case __NR_epoll_create:
+		rc = xi_epoll_create(xpe, (int) ARG1);
+		break;
+	case __NR_epoll_create1:
+		rc = xi_epoll_create1(xpe, (int) ARG1);
+		break;
+	case __NR_epoll_ctl:
+		rc = xi_epoll_ctl(xpe, (int) ARG1, (int) ARG2, (int) ARG3, (struct epoll_event *) ARG4);
+		break;
+	case __NR_epoll_wait:
+		rc = xi_epoll_wait(xpe, (int) ARG1, (struct epoll_event *) ARG2, (int) ARG3, (int) ARG4);
+		break;
+	case __NR_epoll_pwait:
+		rc = xi_epoll_pwait(xpe, (int) ARG1, (struct epoll_event *) ARG2, (int) ARG3, (int) ARG4, (const sigset_t *) ARG5);
+		break;
+
 	case __NR_mkdir:
 		rc = xi_mkdir(xpe, (const char *) ARG1, (mode_t) ARG2);
 		break;
