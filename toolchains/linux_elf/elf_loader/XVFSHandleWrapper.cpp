@@ -129,32 +129,30 @@ uint32_t XVFSHandleWrapper::write(
 	}
 	else
 	{
-		// liang: faking write ops.
-		// uint64_t file_len = hdl->get_file_len();
-		// if (file_pointer + len > file_len)
-		// {
-		// 	XfsErr terr;
-		// 	hdl->ftruncate(&terr, file_pointer+len);
-		// 	if (terr != XFS_NO_ERROR)
-		// 	{
-		// 		// can't grow file
-		// 		*err = terr;
-		// 		return -1;
-		// 	}
-		// }
-		// file_len = hdl->get_file_len();
-		// lite_assert(file_pointer + len <= file_len);
-		// hdl->write(err, src, len, file_pointer);
-		// if ((*err) == XFS_NO_ERROR)
-		// {
-		// 	result = len;
-		// 	file_pointer += len;
-		// }
-		// else
-		// {
-		// 	result = -1;
-		// }
-		result = len;
+		uint64_t file_len = hdl->get_file_len();
+		if (file_pointer + len > file_len)
+		{
+			XfsErr terr;
+			hdl->ftruncate(&terr, file_pointer+len);
+			if (terr != XFS_NO_ERROR)
+			{
+				// can't grow file
+				*err = terr;
+				return -1;
+			}
+		}
+		file_len = hdl->get_file_len();
+		lite_assert(file_pointer + len <= file_len);
+		hdl->write(err, src, len, file_pointer);
+		if ((*err) == XFS_NO_ERROR)
+		{
+			result = len;
+			file_pointer += len;
+		}
+		else
+		{
+			result = -1;
+		}
 	}
 
 	lite_assert((*err) != XFS_DIDNT_SET_ERROR);

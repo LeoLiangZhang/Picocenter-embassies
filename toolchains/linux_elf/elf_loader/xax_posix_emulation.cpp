@@ -211,6 +211,16 @@ void install_default_filesystems(XaxPosixEmulation *xpe, StartupContextFactory *
 		hw->drop_ref();
 	}
 
+	// liang: add these for nginx 
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/client_body_temp");
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/proxy_temp");
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/fastcgi_temp");
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/scgi_temp");
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/uwsgi_temp");
+	xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx/logs");
+	// liang: this will make nginx unreachable.
+	// xax_create_ramfs(xpe, ZOOG_ROOT "/toolchains/linux_elf/liang_apps/nginx");
+
 	xoverlayfs_init(xpe, ZOOG_ROOT "/pseudofiles/etc/passwd", "/etc/passwd");
 	xoverlayfs_init(xpe, ZOOG_ROOT "/pseudofiles/etc/hosts", "/etc/hosts");
 	xoverlayfs_init(xpe, ZOOG_ROOT "/pseudofiles/etc/cups/client.conf", "/etc/cups/client.conf");
@@ -1185,34 +1195,83 @@ int xi_epoll_create1(XaxPosixEmulation *xpe, int flags)
     	et->requests_count = 0;
     	et->requests_size = EPOLL_REQUESTS_DEFAULT_SIZE;
     	et->requests = (EpollRequest *)cheesy_malloc(&xpe->zmf.cheesy_arena, sizeof(EpollRequest)*et->requests_size);
+    	if (et->requests == NULL)
+    		return -ENOMEM;
     	epfd_tuple_list_count += 1;
     	return et->epfd;
     }
     return -ENOSYS;
 }
 
+EpfdTuple *_get_epfd_tuple(int epfd)
+{
+	for (int i = 0; i < epfd_tuple_list_count; i++)
+	{
+		EpfdTuple *et = epfd_tuple_list + i;
+		if (et->epfd == epfd)
+		{
+			return et;
+		}
+	}
+	return NULL;
+}
+
+int _find_epollrequest(EpfdTuple *et, int fd)
+{
+	for (int i = 0; i < et->requests_count; i++)
+	{
+		if (et->requests[i].fd == fd)
+			return i;
+	}
+	return -1;
+}
+
+#define EPOLL_CTL_GET_EPFD_TUPLE \
+		et = _get_epfd_tuple(epfd); \
+		if (et == NULL) { return -EBADF; } 
+
+#define EPOLL_CTL_GET_REQUEST_TUPLE \
+		i = _find_epollrequest(et, fd); \
+		if (i < 0) return -ENOENT; \
+		er = et->requests+i; 
+
 int xi_epoll_ctl(XaxPosixEmulation *xpe, int epfd, int op, int fd, struct epoll_event *event)
 {
 	int i;
+	EpfdTuple *et;
+	EpollRequest *er;
+
 	if (op == EPOLL_CTL_ADD) {
-		for (i = 0; i < epfd_tuple_list_count; i++)
+		EPOLL_CTL_GET_EPFD_TUPLE
+		if (et->requests_count >= et->requests_size)
 		{
-			EpfdTuple *et = epfd_tuple_list + i;
-			if (et->epfd == epfd)
-			{
-				if (et->requests_count < et->requests_size) 
-				{
-					EpollRequest *er = &et->requests[et->requests_count];
-					er->fd = fd;
-					er->event = *event; // TODO: check events is EPOLLET; We only support edge triggering.
-					et->requests_count += 1;
-					return 0;
-				} else {
-					// TODO: enlarge requests size
-					return -ENOMEM;
-				}
-			}
+			int new_size = et->requests_size * 2;
+			EpollRequest *new_er_lst = (EpollRequest *)cheesy_malloc(&xpe->zmf.cheesy_arena, sizeof(EpollRequest)*new_size);
+			if (new_er_lst == NULL)
+				return -ENOMEM;
+			lite_memcpy(new_er_lst, et->requests, sizeof(EpollRequest)*et->requests_size);
+			cheesy_free(et->requests);
+			et->requests = new_er_lst;
+			et->requests_size = new_size;
 		}
+		er = &et->requests[et->requests_count];
+		er->fd = fd;
+		er->event = *event; // TODO: check events is EPOLLET; We only support edge triggering.
+		et->requests_count += 1;
+		return 0;
+	} else if (op == EPOLL_CTL_MOD) {
+		EPOLL_CTL_GET_EPFD_TUPLE
+		EPOLL_CTL_GET_REQUEST_TUPLE
+		er->event = *event;
+		return 0;
+	} else if (op == EPOLL_CTL_DEL) {
+		EPOLL_CTL_GET_EPFD_TUPLE
+		EPOLL_CTL_GET_REQUEST_TUPLE
+		if (i < et->requests_count-1) {
+			*er = et->requests[et->requests_count-1];
+		}
+		et->requests_count -= 1;
+		return 0;
 	} else {
 #ifdef DEBUG_SELECT
 		debug_write_sync("epoll_ctl unsupport op.\n");
@@ -1686,7 +1745,9 @@ xi_sigaction(XaxPosixEmulation *xpe, int sig, const struct sigaction *act, struc
 		}
 	}
 
-	return -EINVAL;
+	// return -EINVAL;
+	// liang: fake for Nginx
+	return 0;
 }
 
 int xi_sigprocmask(XaxPosixEmulation *xpe, int how, const sigset_t *set, sigset_t * oldset)
@@ -2513,7 +2574,9 @@ pid_t xi_getppid(XaxPosixEmulation *xpe)
 
 int xi_ioctl(XaxPosixEmulation *xpe, int fd, unsigned long int request, char *arg)
 {
-	return -EINVAL;
+	// return -EINVAL;
+	// liang: try to fake for Nginx
+	return 0;
 }
 
 int xi_shmget(XaxPosixEmulation *xpe, key_t key, size_t size, int shmflg)
