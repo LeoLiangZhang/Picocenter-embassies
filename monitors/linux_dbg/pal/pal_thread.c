@@ -2,6 +2,9 @@
 #include "pal_thread.h"
 #include "gsfree_lib.h"
 
+// liang: tweak for checkpoint
+#include "checkpoint.h"
+
 int pal_thread_create(pal_thread_func *func, void *arg, uint32_t stack_size)
 {
 	//void *stack = mf_malloc(mf, stack_size);
@@ -10,6 +13,10 @@ int pal_thread_create(pal_thread_func *func, void *arg, uint32_t stack_size)
 	void *stack = debug_alloc_protected_memory(stack_size);
 	int flags = CLONE_VM| CLONE_FS| CLONE_FILES| CLONE_SIGHAND| CLONE_THREAD| CLONE_SYSVSEM;
 	int rc = clone(func, stack+stack_size-4, flags, arg);
+	
+	// liang: save tid
+	lz_tid_list[lz_thread_count++] = rc;
+
 	gsfree_assert(rc>0);
 	return rc;
 }

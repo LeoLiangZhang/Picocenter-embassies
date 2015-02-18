@@ -26,6 +26,9 @@
 // liang: seccomp
 #include "seccomp.h"
 
+// liang: checkpoint
+#include "checkpoint.h"
+
 void *load_all(const char *path)
 {
 	int fd = open(path, O_RDONLY);
@@ -156,17 +159,40 @@ void setup_seccomp()
 	fprintf(stderr, "seccomp_load %d\n", rc);
 }
 
+
+typedef struct {
+	uint32_t caller_gs_base;
+} XILThreadContext;
+
+void xtc_init(XILThreadContext *xtc);
+
+uint32_t get_gs(void);
+
+int kernel_set_thread_area(struct user_desc *ud);
+
+#define PROTECT_GS_START() \
+	{ XILThreadContext __xtc; \
+	xtc_init(&__xtc); \
+	xil_x86_set_segments_internal(0, 0);
+	// Note use of unbalanced {'s to enforce bracketed use in program
+	// text. It'll make for horrible compiler errors, but at least
+	// they'll be errors.
+	// NB also the assumption that the caller puts his gs base
+	// at %gs:(0). libc does. Good luck! Well, this won't work for Windows DPI
+	// apps. Rats. This isn't a generalizable solution. Really
+	// need a %gs-free library.
+#define PROTECT_GS_END() \
+	xil_x86_set_segments_internal(0, __xtc.caller_gs_base); }
+
+
+void xil_x86_set_segments_internal(uint32_t fs, uint32_t gs);
+
 int main(int argc, char **argv)
 {
-	setup_sigtrap();
-
-	pal_state_init();
-
-	g_shm_unlink = true;	// normal case
-//	g_shm_unlink = false;	// when server is root
-
+	// parse arguments from command line.
 	bool wait_for_debugger = false;
 	bool raw_binary = false;
+	bool is_resume = false;
 
 	argc--; argv++;
 	while (argc>0)
@@ -186,12 +212,26 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Unknown option %s\n", argv[0]);
 			exit(-1);
 		}
+		else if (strcmp(argv[0], "--resume")==0)
+		{
+			is_resume = true;
+		}
 		else
 		{
 			loader_path = argv[0];
 			argc--; argv++;
 		}
 	}
+
+	printf("PID = %d\n", getpid());
+	lz_setup_sig_checkpoint();
+
+	setup_sigtrap();
+
+	pal_state_init();
+
+	g_shm_unlink = true;	// normal case
+//	g_shm_unlink = false;	// when server is root
 	
 	while (wait_for_debugger) { sleep(1); }
 
