@@ -226,6 +226,9 @@ int main(int argc, char **argv)
 	printf("PID = %d\n", getpid());
 	lz_setup_sig_checkpoint();
 
+	if (is_resume)
+		lz_checkpoint_resume();
+
 	setup_sigtrap();
 
 	pal_state_init();
