@@ -13,6 +13,9 @@
 #include <pthread.h>
 #include <stdint.h>
 
+// liang: mmap support
+#include <signal.h>
+
 #include "ZoogVM.h"
 #include "ZoogVCPU.h"
 #include "MemSlot.h"
@@ -454,6 +457,9 @@ void ZoogVM::start()
 				}
 			}
 
+			void segv_load_all();
+			segv_load_all();
+
 			const char *coredump_fn = "zvm.core";
 			FILE *fp = fopen(coredump_fn, "w");
 			emit_corefile(fp);
@@ -745,6 +751,113 @@ void ZoogVM::resume()
 	}
 }
 
+#define DYNAMIC_MAPPER false
+
+typedef struct
+{
+	uint8_t *host_addr;
+	uint32_t virt_addr;
+	uint32_t size;
+	long fp_offset;
+	int prot;
+} Mmapper;
+
+Mmapper *mmapper_list;
+int mmaper_list_count = 0;
+
+void segv_load_all()
+{
+	Mmapper *mp;
+	int rc;
+	int mmap_prot = PROT_READ | PROT_WRITE;
+
+	const char *corefile = "kvm.core";
+	FILE *fp = fopen(corefile, "r");
+	lite_assert(fp!=NULL);
+
+	for (int i = 0; i < mmaper_list_count; i++) {
+		mp = mmapper_list + i;
+		if(mp->prot == PROT_NONE) {
+			mp->prot = mmap_prot;
+			void *mmap_rc = mmap(mp->host_addr, mp->size, mmap_prot, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+			lite_assert(mmap_rc == mp->host_addr);
+
+			fseek(fp, mp->fp_offset, SEEK_SET);
+			rc = fread(mp->host_addr, mp->size, 1, fp);
+			lite_assert(rc == 1);
+			// lite_assert((int)(mp->fp_offset + mp->size) == ftell(fp));
+			
+			fprintf(stderr, "Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
+				mp->virt_addr, (unsigned int)mp->host_addr, mp->size);
+		}
+	}
+	fclose(fp);
+}
+
+void segv_load_addr(void *segv_addr)
+{
+	// void *pg = (void*)((long)(segv_addr) & ~4095);
+
+	Mmapper *mp;
+	for (int i = 0; i < mmaper_list_count; i++) {
+		mp = mmapper_list + i;
+		if (mp->host_addr <= segv_addr && 
+			  segv_addr < mp->host_addr + mp->size) {
+			break;
+		}
+	}
+
+	int mmap_prot = PROT_READ | PROT_WRITE;
+	if(mp->prot == PROT_NONE) {
+		int rc;
+		// if (mprotect(mp->host_addr, mp->size, mmap_prot) <0){
+		// 	fprintf(stderr, "fault: can't mprotect.\n");
+		// 	exit(1);
+		// }
+		void *mmap_rc = mmap(mp->host_addr, mp->size, mmap_prot, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+		lite_assert(mmap_rc == mp->host_addr);
+
+		mp->prot = mmap_prot;
+		const char *corefile = "kvm.core";
+		FILE *fp = fopen(corefile, "r");
+		lite_assert(fp!=NULL);
+		fseek(fp, mp->fp_offset, SEEK_SET);
+		rc = fread(mp->host_addr, mp->size, 1, fp);
+		lite_assert(rc == 1);
+		// lite_assert((int)(mp->fp_offset + mp->size) == ftell(fp));
+		fclose(fp);
+		fprintf(stderr, "Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
+			mp->virt_addr, (unsigned int)mp->host_addr, mp->size);
+	}
+
+	// int mmap_size = 4096;
+	// fprintf(stderr, "fault at %p (%p), set mode to %x\n", segv_addr, pg, mmap_prot);
+	// if (mprotect(pg, mmap_size, mmap_prot) <0){
+	// 	perror("fault: can't mprotect.");
+	// 	exit(1);
+	// }
+	// assert(memcpy(desired_host_phys_addr, data, strlen(data)));
+}
+
+void segv_handler(int signum, siginfo_t *siginfo, void *context)
+{
+	void *pg = (void*)((long)(siginfo->si_addr) & ~4095);
+	fprintf(stderr, "fault at %p (%p)\n", siginfo->si_addr, pg);
+
+	segv_load_addr(siginfo->si_addr);
+}
+
+void set_segv_handler()
+{
+	int rc;
+	struct sigaction sa;
+	sa.sa_sigaction = segv_handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_SIGINFO;
+	rc = sigaction(SIGSEGV, &sa, NULL);
+	lite_assert(rc == 0);
+}
+
 void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 {
 	const char *corefile = "kvm.core";
@@ -807,8 +920,16 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	thread_notes_size = phdr.p_filesz - sizeof(CoreNote_Zoog);
 	thread_offset = phdr.p_offset;
 
+	int mem_header_count = ehdr.e_phnum - num_notes;
+	if (DYNAMIC_MAPPER)
+	{
+		mmapper_list = (Mmapper*)mf_malloc(mf, sizeof(Mmapper) * mem_header_count);
+		mmaper_list_count = mem_header_count;
+		set_segv_handler();
+	}
+
 	uint32_t last_guest_range_end = 0x10001000; // the same as _map_physical_memory
-	for (i = 0; i < ehdr.e_phnum - num_notes; i++)
+	for (i = 0; i < mem_header_count; i++)
 	{
 		rc = fread(&phdr, sizeof(Elf32_Phdr), 1, fp);
 		lite_assert(rc == 1);
@@ -817,7 +938,6 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 		
 		{
 			uint32_t size = phdr.p_memsz;
-			fseek(fp, phdr.p_offset, SEEK_SET);
 			
 			MemSlot *mem_slot = new MemSlot(label);
 			Range guest_range;
@@ -825,11 +945,26 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 			guest_memory_allocator->allocate_range_at(phdr.p_vaddr, round_size, mem_slot, &guest_range);
 			uint8_t *host_addr = host_phys_memory + guest_range.start;
 			mem_slot->configure(guest_range, host_addr);
-			void *mmap_rc = mmap(host_addr, round_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
+
+			int mmap_prot = PROT_READ|PROT_WRITE;
+			if (DYNAMIC_MAPPER)
+			{
+				mmap_prot = PROT_NONE;
+				mmapper_list[i].host_addr = host_addr;
+				mmapper_list[i].size = round_size;
+				mmapper_list[i].virt_addr = phdr.p_vaddr;
+				mmapper_list[i].fp_offset = phdr.p_offset;
+				mmapper_list[i].prot = mmap_prot;
+			}
+
+			void *mmap_rc = mmap(host_addr, round_size, mmap_prot, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
 			lite_assert(mmap_rc == host_addr);
 
-			fread(host_addr, size, 1, fp);
-			lite_assert((int)(phdr.p_offset + size) == ftell(fp));
+			if (!DYNAMIC_MAPPER) {
+				fseek(fp, phdr.p_offset, SEEK_SET);
+				fread(host_addr, size, 1, fp);
+				lite_assert((int)(phdr.p_offset + size) == ftell(fp));
+			}
 
 			fprintf(stderr, "Memory loaded: get_guest_addr=%x, get_host_addr=%x, get_size=%d\n", 
 				mem_slot->get_guest_addr(), (int)mem_slot->get_host_addr(), mem_slot->get_size());
@@ -886,6 +1021,14 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 		ZoogVCPU *vcpu = new ZoogVCPU(this, ptr);
 		vcpu->get_zid(); 
 		lite_assert(ptr->gdt_page);
+	}
+
+	if (DYNAMIC_MAPPER) {
+		// void *desired_host_phys_addr = (void*) 0x18000000;
+		// rc = mprotect(desired_host_phys_addr, host_phys_memory_size, PROT_NONE);
+		// lite_assert(rc==0);
+		segv_load_addr((void*)0x28003000);
+		segv_load_addr((void*)0x28153000);	
 	}
 
 	fclose(fp);
