@@ -94,8 +94,8 @@ static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 		}
 		page_served += page_cached->nr;
 
-
-		sleep(1); /* Wait for the fault handler completion.
+		// sleep(1);
+		 /* Wait for the fault handler completion.
 			   * you have to communication with the client.
 			   * sleep() is used here for simplicity.
 			   */
@@ -133,8 +133,8 @@ static void client(int uvmem_fd, size_t size, size_t page_size)
 	int val[UVMEM_NR_PAGES];
 	int i;
 	for (i = 0; i < UVMEM_NR_PAGES; ++i) {
-		if (i == 2 || i == 6)
-			sleep(1);
+		// if (i == 2 || i == 6)
+		// 	sleep(1);
 		DPRINTF("access to %d\n", pages[i]);
 		fflush(stdout);
 		val[i] = *(uint8_t*)(ram + page_size * pages[i]);
@@ -182,7 +182,7 @@ int main(int argc, char **argv)
 		err(EXIT_FAILURE, "fork");
 	}
 	if (child == 0) {
-		sleep(1);
+		// sleep(1);
 		printf("server pid: %d\n", getpid());
 		server(uvmem_fd, shmem_fd, size, page_size);
 		return 0;
@@ -190,7 +190,8 @@ int main(int argc, char **argv)
 
 	printf("qemu pid: %d server pid: %d\n", getpid(), child);
 	close(shmem_fd);
-	sleep(1);	/* wait the daemon is ready
+	// sleep(1);	
+	/* wait the daemon is ready
 			 * To make it sure, communication with the server
 			 * is needed. sleep() is used here for simplicity.
 			 */

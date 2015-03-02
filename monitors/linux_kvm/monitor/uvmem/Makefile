@@ -6,20 +6,35 @@ else
 # normal makefile
 KDIR ?= /lib/modules/`uname -r`/build
 
-default:
+SYSMAP_SYMBOLS = shmem_zero_setup
+
+uvmem_sysmap.h :
+	/bin/bash make_uvmem_sysmap.sh $(SYSMAP_SYMBOLS) > $@
+
+uvmem.ko : uvmem_sysmap.h
 	$(MAKE) -C $(KDIR) M=$$PWD
 
-# Module specific targets
-genbin:
-	echo "X" > uvmem.o_shipped
+build : uvmem.ko
 
-testbin:
+insmod : uvmem.ko
+	sudo insmod uvmem.ko
+
+rmmod :
+	sudo rmmod uvmem
+
+chown :
+	sudo chown `id -u` /dev/uvmem
+
+all : build
+.PHONY : all clean build rmmod chown insmod
+
+testbin :
 	gcc -g -o uvmem_test uvmem_test.c
 
-test: testbin
+test : testbin
 	./uvmem_test
 
-clean:
-	rm *.o *.ko *.mod.c *.symvers *.order uvmem_test
+clean :
+	rm *.o *.ko *.mod.c *.symvers *.order uvmem_test uvmem_sysmap.h
 
 endif
