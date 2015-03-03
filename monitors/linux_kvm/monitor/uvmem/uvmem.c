@@ -641,42 +641,44 @@ static unsigned long uvmem_bitmap_bytes(unsigned long pgoff_end)
 	return round_up(pgoff_end, BITS_PER_LONG) / 8;
 }
 
-// static const struct vm_operations_struct my_shmem_vm_ops = {
-// 	// .fault		= shmem_fault,
-// 	.fault		= filemap_fault,
-// 	.map_pages	= filemap_map_pages,
-// #ifdef CONFIG_NUMA
-// 	.set_policy     = NULL,//my_shmem_set_policy,
-// 	.get_policy     = NULL,//my_shmem_get_policy,
-// #endif
-// 	.remap_pages	= generic_file_remap_pages,
-// };
+#ifndef USE_SYSMAP
+static const struct vm_operations_struct my_shmem_vm_ops = {
+	// .fault		= shmem_fault,
+	.fault		= filemap_fault,
+	.map_pages	= filemap_map_pages,
+#ifdef CONFIG_NUMA
+	.set_policy     = NULL,//my_shmem_set_policy,
+	.get_policy     = NULL,//my_shmem_get_policy,
+#endif
+	.remap_pages	= generic_file_remap_pages,
+};
 
-// extern struct vm_operations_struct generic_file_vm_ops;
+static int my_shmem_zero_setup(struct vm_area_struct *vma)
+{
+	struct file *file;
+	loff_t size = vma->vm_end - vma->vm_start;
 
-// static int my_shmem_zero_setup(struct vm_area_struct *vma)
-// {
-// 	struct file *file;
-// 	loff_t size = vma->vm_end - vma->vm_start;
+	file = shmem_file_setup("dev/zero", size, vma->vm_flags);
+	if (IS_ERR(file))
+		return PTR_ERR(file);
 
-// 	file = shmem_file_setup("dev/zero", size, vma->vm_flags);
-// 	if (IS_ERR(file))
-// 		return PTR_ERR(file);
+	if (vma->vm_file)
+		fput(vma->vm_file);
+	vma->vm_file = file;
+	vma->vm_ops = &my_shmem_vm_ops;
+	// vma->vm_ops = (struct vm_operations_struct*)0xffffffff8181bfc0;
+	// printk("vm_ops->remap_pages = %lx, generic_file_remap_pages = %lx\n", 
+	// 	(long unsigned int)vma->vm_ops->remap_pages, (long unsigned int)generic_file_remap_pages);
+	// printk("vm_ops->fault = %lx, shmem_fault = %lx\n", 
+	// 	(long unsigned int)vma->vm_ops->fault, (long unsigned int)0xffffffff81168c40);
+	return 0;
+}
+#endif
 
-// 	if (vma->vm_file)
-// 		fput(vma->vm_file);
-// 	vma->vm_file = file;
-// 	// vma->vm_ops = &my_shmem_vm_ops;
-// 	vma->vm_ops = (struct vm_operations_struct*)0xffffffff8181bfc0;
-// 	printk("vm_ops->remap_pages = %lx, generic_file_remap_pages = %lx\n", 
-// 		(long unsigned int)vma->vm_ops->remap_pages, (long unsigned int)generic_file_remap_pages);
-// 	printk("vm_ops->fault = %lx, shmem_fault = %lx\n", 
-// 		(long unsigned int)vma->vm_ops->fault, (long unsigned int)0xffffffff81168c40);
-// 	return 0;
-// }
-
+#ifdef USE_SYSMAP
 typedef int (*sys_shmem_zero_setup)(struct vm_area_struct*);
 static sys_shmem_zero_setup _shmem_zero_setup = (sys_shmem_zero_setup)SYSMAP_shmem_zero_setup;
+#endif
 
 static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
 {
@@ -730,9 +732,12 @@ static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
 		goto out;
 	}
 
+#ifndef USE_SYSMAP
+	error = my_shmem_zero_setup(vma);
+#else
 	// liang: try symbol exported from System.map
-	// error = my_shmem_zero_setup(vma);
 	error = _shmem_zero_setup(vma);
+#endif
 
 	if (error < 0) {
 		put_unused_fd(shmem_fd);

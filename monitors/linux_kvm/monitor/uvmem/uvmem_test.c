@@ -53,14 +53,15 @@ static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 	memset(shmem, fill, page_size);
 	page_cached->pgoffs[0] = 0;
 
-	DPRINTF("write: 0\n");
-	ssize_t len = sizeof(page_cached->pgoffs[0]);
-	ssize_t written = write(uvmem_fd, page_cached->pgoffs, len);
-	if (written < len) {
-		err(EXIT_FAILURE, "server: write");
-	}
+	// DPRINTF("write: 0\n");
+	// ssize_t len = sizeof(page_cached->pgoffs[0]);
+	// ssize_t written = write(uvmem_fd, page_cached->pgoffs, len);
+	// if (written < len) {
+	// 	err(EXIT_FAILURE, "server: write");
+	// }
 
-	int page_served = 1;
+	ssize_t len, written;
+	int page_served = 0;
 	while (page_served < nr_pages) {
 		DPRINTF("read\n");
 		len = read(uvmem_fd, page_request->pgoffs,
@@ -78,31 +79,31 @@ static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 			memset(shmem + page_size * page_request->pgoffs[i],
 			       fill, page_size);
 			fill++;
-			page_cached->pgoffs[page_cached->nr] =
-				page_request->pgoffs[i];
-			page_cached->nr++;
+			// page_cached->pgoffs[page_cached->nr] =
+			// 	page_request->pgoffs[i];
+			// page_cached->nr++;
 			DPRINTF("request[%d] %lx fill: %d\n",
 				i, (unsigned long)page_request->pgoffs[i],
 				fill - 1);
 		}
 
 		DPRINTF("write\n");
-		len = sizeof(page_cached->pgoffs[0]) * page_cached->nr;
-		written = write(uvmem_fd, page_cached->pgoffs, len);
+		// len = sizeof(page_cached->pgoffs[0]) * page_cached->nr;
+		written = write(uvmem_fd, page_request->pgoffs, len);
 		if (written < len) {
 			err(EXIT_FAILURE, "server: write");
 		}
-		page_served += page_cached->nr;
+		page_served += page_request->nr;
 
 		// sleep(1);
 		 /* Wait for the fault handler completion.
 			   * you have to communication with the client.
 			   * sleep() is used here for simplicity.
 			   */
-		for (i = 0; i < page_request->nr; ++i) {
-			madvise(shmem + page_size * page_request->pgoffs[i],
-				page_size, MADV_REMOVE);
-		}
+		// for (i = 0; i < page_request->nr; ++i) {
+		// 	madvise(shmem + page_size * page_request->pgoffs[i],
+		// 		page_size, MADV_REMOVE);
+		// }
 	}
 
 #if 0
