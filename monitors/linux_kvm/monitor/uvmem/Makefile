@@ -10,6 +10,7 @@ SYSMAP_SYMBOLS = shmem_zero_setup
 
 uvmem_sysmap.h :
 	/bin/bash make_uvmem_sysmap.sh $(SYSMAP_SYMBOLS) > $@
+	uname -r |grep -E '^3.13' >/dev/null && echo "#define USE_SYSMAP" >> $@
 
 uvmem.ko : uvmem_sysmap.h
 	$(MAKE) -C $(KDIR) M=$$PWD
