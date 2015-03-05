@@ -555,6 +555,12 @@ void ZoogVCPU::extn_debug_logfile_append(xa_extn_debug_logfile_append *xa_guest)
 		fwrite(xa_guest->in_msg_bytes, xa.in_msg_len, 1, stderr);
 		fflush(stderr);
 	}
+	// liang: also print stdout to console;
+	if (strcmp(logfile_name, "stdout")==0)
+	{
+		fwrite(xa_guest->in_msg_bytes, xa.in_msg_len, 1, stdout);
+		fflush(stdout);
+	}
 #endif // DEBUG_VULNERABLY
 fail:
 	return;

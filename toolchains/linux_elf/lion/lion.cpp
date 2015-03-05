@@ -130,6 +130,18 @@ void loop_test_dirty_page(int count)
   }
 }
 
+int main1(int argc, char**argv)
+{
+  // test stdout
+  int i = 0;
+  printf("Hello world.\n");
+  while(1) {
+    fprintf(stdout, "Count %d\n", i++);
+    fflush(stdout);
+    sleep(1);
+  }
+}
+
 int main(int argc, char**argv)
 {
   
