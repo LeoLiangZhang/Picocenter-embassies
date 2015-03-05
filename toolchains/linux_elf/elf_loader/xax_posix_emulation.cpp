@@ -2575,9 +2575,9 @@ pid_t xi_getppid(XaxPosixEmulation *xpe)
 int xi_ioctl(XaxPosixEmulation *xpe, int fd, unsigned long int request, char *arg)
 {
 	// python needs this:
-	return -EINVAL;
+	// return -EINVAL;
 	// liang: try to fake for Nginx
-	// return 0;
+	return 0;
 }
 
 int xi_shmget(XaxPosixEmulation *xpe, key_t key, size_t size, int shmflg)

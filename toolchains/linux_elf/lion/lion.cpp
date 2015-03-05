@@ -113,6 +113,23 @@ void test_file()
   fclose(f);
 }
 
+void loop_test_dirty_page(int count)
+{
+  int i;
+  _printf("loop_test_dirty_page, stack addr %lx\n", (unsigned long)&count);
+  int size = 4096*10;
+  int *buf = (int*)malloc(size); // alloc a page
+  *buf = 43;
+    
+  // for(i = 0; i < count; i++){
+  while(1){  
+    *(buf+4096*5/sizeof(int)) = i++;
+    _printf("touch i(0x%lx) = %d\n", (unsigned long)&i, i);
+    _printf("touch heap(0x%lx) = %d\n", (unsigned long)buf, *buf);
+    sleep(1);
+  }
+}
+
 int main(int argc, char**argv)
 {
   
@@ -138,7 +155,8 @@ int main(int argc, char**argv)
   // stream_main();
   // whetstone_main();
   // test_file();
-  epoll_main(argc, argv);
+  // epoll_main(argc, argv);
+  loop_test_dirty_page(10000000);
 
   _printf("Bye\n");
   _printf("time: %ld s\n", time(NULL)-t0);

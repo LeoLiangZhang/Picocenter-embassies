@@ -180,7 +180,9 @@ void ZoogVM::_map_physical_memory(bool resume)
 
 	struct kvm_userspace_memory_region umr;
 	umr.slot = 0;
-	umr.flags = 0;
+	// umr.flags = 0;
+	// liang: enable dirty page log.
+	umr.flags = KVM_MEM_LOG_DIRTY_PAGES;
 	umr.guest_phys_addr = 0;
 	umr.memory_size = host_phys_memory_size;
 	umr.userspace_addr = ((__u64) host_phys_memory) & 0x0ffffffffL;
@@ -703,15 +705,64 @@ void ZoogVM::_emit_swapfile(FILE *fp)
 
 void sync_ckpt_mmap()
 {
+	// liang: use this function in testing write back on file-backed pages.
+	// result: KVM write back don't work, because cannot map shared pages.
 	int rc;
 	rc = msync((void*)0x28001000, 69763072, MS_SYNC);
 	lite_assert(rc == 0);
 	fprintf(stderr, "Sync to mapped file.\n");
 }
 
+void read_dirty_log(uint8_t *bitmap, int size)
+{
+	int i = 0, p;
+	unsigned long val = 0;
+	long page_start = 0;//GUEST_ADDR_START;
+	long page = 0, count = 0, print_cut = 100;
+	while (i < size) {
+		// long in 32bit process is 4 bytes while it's 8 bytes in 64bit.
+		// I am using 64bit kernel, and kernel use long type for bitmap ops.
+		if (i + (int)sizeof(long) > size) {
+			lite_assert(memcpy(&val, bitmap+i, size-i) == &val);
+		} else {
+			val = *(long*)(bitmap+i);
+		}
+
+		while((p = ffsl(val))) {
+			page = page_start + (i*8+p-1)*PAGE_SIZE;
+			if (count < print_cut)
+				printf("Byte offset %d, Updated page 0x%lx\n", i, page);
+			else if (count == print_cut)
+				printf("This section has updated more than %ld pages.\n", print_cut);
+			val = val & ~(1UL << (p-1));
+			count++;
+		}
+		i += sizeof(long);
+	}
+	printf("Allocated %dB bitmap and updated %ld pages.\n", size, count);
+}
+
 void ZoogVM::checkpoint()
 {
 	// sync_ckpt_mmap();
+	int size = host_phys_memory_size;
+	// size = 0x11389000 + 4096*1;
+	int nbyte = ((GUEST_ADDR_START + size-1) / PAGE_SIZE / 8) + 1;
+	uint8_t *dlog_buf = (uint8_t*)mf_malloc(mf, nbyte);
+	// uint8_t *dlog_buf = (uint8_t*)malloc(nbyte);
+	lite_assert(dlog_buf);
+	// uint8_t dlog_buf[nbyte];
+	memset(dlog_buf, 0, nbyte);
+
+	struct kvm_dirty_log dlog;
+	dlog.slot = 0; // liang: we only have one mapped region/slot
+	// dlog.dirty_bitmap = &dlog_buf;
+	dlog.dirty_bitmap = dlog_buf;
+	int rc = ioctl(vmfd, KVM_GET_DIRTY_LOG, &dlog);
+	lite_assert(rc == 0);
+	read_dirty_log((uint8_t*)dlog.dirty_bitmap, nbyte);
+	mf_free(mf, dlog_buf);
+	// free(dlog_buf);
 	return; 
 
 	const char *corefile = "kvm.core";
