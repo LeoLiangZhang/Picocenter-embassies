@@ -30,10 +30,6 @@
 #include "VCPUPool.h"
 #include "KeyDerivationKey.h"
 
-#define GUEST_ADDR_START 0x10001000
-#define HOST_ADDR_START 0x18000000
-#define DEV_UVMEM	"/dev/uvmem"
-
 ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
@@ -955,15 +951,48 @@ static int mmapper_page_comp(const void *m1, const void *m2)
 	}
 }
 
+void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
+{
+	int rc;
+	Mmapper *mp = NULL; bool found = false;
+	void *segv_addr = (void*)(HOST_ADDR_START + GUEST_ADDR_START + pg*page_size);
+
+#if 0
+	// Linear search.
+	for (int j = 0; j < mmaper_list_count; j++) {
+		mp = mmapper_list + j;
+		if (mp->host_addr <= segv_addr && 
+			  segv_addr < mp->host_addr + mp->size) {
+			found = true;
+			break;
+		}
+	}
+#else
+	Mmapper key; key.host_addr = (uint8_t*)segv_addr;
+	mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
+#endif
+	found = (mp != NULL);
+	if (found) {
+		long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
+		rc = fseek(fp, fp_offset, SEEK_SET);
+		lite_assert(rc == 0);
+		rc = fread((uint8_t*)shmem+pg*page_size, page_size, 1, fp);
+		printf("page %lx at host %lx.\n", (unsigned long)pg, (unsigned long)segv_addr);
+	} else {
+		memset((uint8_t*)shmem+pg*page_size, 0, page_size);
+		printf("page %lx at host %lx, page not found, fill with zeros.\n", (unsigned long)pg, (unsigned long)segv_addr);
+	}
+}
+
 void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
 	Py_SetProgramName((char*)"zoog_kvm_monitor");  /* optional but recommended */
 	Py_Initialize();
 	PyRun_SimpleString("from time import time,ctime\n"
-	                   "print 'Today is',ctime(time())\n");
+		"print 'Today is',ctime(time())\n");
 
 	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
-	int len, n_pages=0, nr, i, rc;
+	int len, n_pages=0, nr, i;
 
 	int nr_pages = size / page_size;
 	void* shmem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
@@ -982,29 +1011,8 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 		nr = len / sizeof(buf_pgs[0]);
 		printf("Requesting %d pages.\n", nr);
 		for (i = 0; i < nr; i++) {
-			void *segv_addr = (void*)(HOST_ADDR_START + GUEST_ADDR_START + buf_pgs[i]*page_size);
-			Mmapper *mp = NULL; bool found = false;
-			// for (int j = 0; j < mmaper_list_count; j++) {
-			// 	mp = mmapper_list + j;
-			// 	if (mp->host_addr <= segv_addr && 
-			// 		  segv_addr < mp->host_addr + mp->size) {
-			// 		found = true;
-			// 		break;
-			// 	}
-			// }
-			Mmapper key; key.host_addr = (uint8_t*)segv_addr;
-			mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
-			found = (mp != NULL);
-			if (found) {
-				long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
-				rc = fseek(fp, fp_offset, SEEK_SET);
-				lite_assert(rc == 0);
-				rc = fread((uint8_t*)shmem+buf_pgs[i]*page_size, page_size, 1, fp);
-				printf("request[%d] %lx at host %lx.\n", i, (unsigned long)buf_pgs[i], (unsigned long)segv_addr);
-			} else {
-				memset((uint8_t*)shmem+buf_pgs[i]*page_size, 0, page_size);
-				printf("Page not found: request[%d] %lx at host %lx, fill with zeros.\n", i, (unsigned long)buf_pgs[i], (unsigned long)segv_addr);
-			}
+			printf("Request[%d] ", i);
+			load_page_at(fp, shmem, buf_pgs[i], page_size);
 		}
 		int written = write(uvmem_fd, buf_pgs, len);
 		if (written < len) {

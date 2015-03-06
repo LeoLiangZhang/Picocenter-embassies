@@ -43,6 +43,9 @@ class ZoogVCPU;
 class VCPUPool;
 
 #define HOST_PHYS_MEM_SIZE ((uint32_t)(3<<29))	// 1.5GB
+#define GUEST_ADDR_START 0x10001000
+#define HOST_ADDR_START 0x18000000
+#define DEV_UVMEM	"/dev/uvmem"
 
 class ZoogVM : public MemoryMapIfc {
 public:
