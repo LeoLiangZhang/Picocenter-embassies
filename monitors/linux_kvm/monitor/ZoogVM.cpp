@@ -18,6 +18,9 @@
 #include <err.h>
 #include "uvmem/uvmem.h"
 
+// liang: Python support for page-serving process
+#include <python2.6/Python.h>
+
 #include "ZoogVM.h"
 #include "ZoogVCPU.h"
 #include "MemSlot.h"
@@ -954,6 +957,11 @@ static int mmapper_page_comp(const void *m1, const void *m2)
 
 void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
+	Py_SetProgramName((char*)"zoog_kvm_monitor");  /* optional but recommended */
+	Py_Initialize();
+	PyRun_SimpleString("from time import time,ctime\n"
+	                   "print 'Today is',ctime(time())\n");
+
 	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
 	int len, n_pages=0, nr, i, rc;
 

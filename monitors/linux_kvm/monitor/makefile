@@ -124,6 +124,7 @@ INCS=\
 LIBS=\
 	-lpthread\
 	-ldl\
+	-lpython2.6\
 
 CFLAGS=\
 	-g \
