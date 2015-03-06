@@ -42,6 +42,8 @@ class MemSlot;
 class ZoogVCPU;
 class VCPUPool;
 
+#define HOST_PHYS_MEM_SIZE ((uint32_t)(3<<29))	// 1.5GB
+
 class ZoogVM : public MemoryMapIfc {
 public:
 	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core);
@@ -168,7 +170,7 @@ private:
 	void *guest_app_code_start;
 
 	uint8_t *host_phys_memory;
-	static const uint32_t host_phys_memory_size = 3<<29;	// 1.5GB
+	static const uint32_t host_phys_memory_size = HOST_PHYS_MEM_SIZE;
 
 	char *dbg_bootblock_path;
 

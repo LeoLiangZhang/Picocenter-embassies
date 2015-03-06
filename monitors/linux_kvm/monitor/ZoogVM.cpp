@@ -465,8 +465,8 @@ void ZoogVM::start()
 				}
 			}
 
-			void segv_load_all();
-			segv_load_all();
+			// void segv_load_all();
+			// segv_load_all();
 
 			const char *coredump_fn = "zvm.core";
 			FILE *fp = fopen(coredump_fn, "w");
@@ -703,6 +703,7 @@ void ZoogVM::_emit_swapfile(FILE *fp)
 	}
 }
 
+#if 0
 void sync_ckpt_mmap()
 {
 	// liang: use this function in testing write back on file-backed pages.
@@ -712,6 +713,7 @@ void sync_ckpt_mmap()
 	lite_assert(rc == 0);
 	fprintf(stderr, "Sync to mapped file.\n");
 }
+#endif
 
 void read_dirty_log(uint8_t *bitmap, int size)
 {
@@ -739,7 +741,7 @@ void read_dirty_log(uint8_t *bitmap, int size)
 		}
 		i += sizeof(long);
 	}
-	printf("Allocated %dB bitmap and updated %ld pages.\n", size, count);
+	printf("Allocated %d bytes bitmap and updated %ld pages.\n", size, count);
 }
 
 void ZoogVM::checkpoint()
@@ -833,6 +835,7 @@ typedef struct
 Mmapper *mmapper_list;
 int mmaper_list_count = 0;
 
+#if 0
 void segv_load_all()
 {
 	Mmapper *mp;
@@ -925,10 +928,35 @@ void set_segv_handler()
 	rc = sigaction(SIGSEGV, &sa, NULL);
 	lite_assert(rc == 0);
 }
+#endif
 
 #define UVMEM_PAGE_BUF_SIZE 32
+
+static int mmapper_page_comp(const void *m1, const void *m2)
+{
+	Mmapper *mp1 = (Mmapper*)m1, *mp2 = (Mmapper*)m2;
+	if (mp1->host_addr < mp2->host_addr) {
+		return mp1->host_addr - mp2->host_addr;
+	} else if (mp1->host_addr > (mp2->host_addr+mp2->size-1)) {
+		return mp1->host_addr > (mp2->host_addr+mp2->size-1);
+	} else {
+		if (mp2->host_addr <= mp1->host_addr &&
+			mp1->host_addr < mp2->host_addr+mp2->size)
+			return 0;
+		else {
+			// break page assumption
+			// assuming each saved memory is at page boundary.
+			err(EXIT_FAILURE, "Break page assumption.");
+			return 0;
+		}
+	}
+}
+
 void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
+	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
+	int len, n_pages=0, nr, i, rc;
+
 	int nr_pages = size / page_size;
 	void* shmem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
 			   shmem_fd, 0);
@@ -938,12 +966,6 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	close(shmem_fd);
 	printf("Serving pages at %lx\n", (unsigned long)shmem);
 
-	// close(fp);
-	// fp = fopen("/elasticity/embassies/nginx.mem", "r");
-	// lite_assert(fp);
-
-	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
-	int len, n_pages, nr, i, rc;
 	while (n_pages < nr_pages) {
 		len = read(uvmem_fd, buf_pgs, sizeof(buf_pgs));
 		if (len < 0) {
@@ -953,21 +975,28 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 		printf("Requesting %d pages.\n", nr);
 		for (i = 0; i < nr; i++) {
 			void *segv_addr = (void*)(HOST_ADDR_START + GUEST_ADDR_START + buf_pgs[i]*page_size);
-			Mmapper *mp; bool found = false;
-			for (int j = 0; j < mmaper_list_count; j++) {
-				mp = mmapper_list + j;
-				if (mp->host_addr <= segv_addr && 
-					  segv_addr < mp->host_addr + mp->size) {
-					found = true;
-					break;
-				}
+			Mmapper *mp = NULL; bool found = false;
+			// for (int j = 0; j < mmaper_list_count; j++) {
+			// 	mp = mmapper_list + j;
+			// 	if (mp->host_addr <= segv_addr && 
+			// 		  segv_addr < mp->host_addr + mp->size) {
+			// 		found = true;
+			// 		break;
+			// 	}
+			// }
+			Mmapper key; key.host_addr = (uint8_t*)segv_addr;
+			mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
+			found = (mp != NULL);
+			if (found) {
+				long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
+				rc = fseek(fp, fp_offset, SEEK_SET);
+				lite_assert(rc == 0);
+				rc = fread((uint8_t*)shmem+buf_pgs[i]*page_size, page_size, 1, fp);
+				printf("request[%d] %lx at host %lx.\n", i, (unsigned long)buf_pgs[i], (unsigned long)segv_addr);
+			} else {
+				memset((uint8_t*)shmem+buf_pgs[i]*page_size, 0, page_size);
+				printf("Page not found: request[%d] %lx at host %lx, fill with zeros.\n", i, (unsigned long)buf_pgs[i], (unsigned long)segv_addr);
 			}
-			lite_assert(found);
-			long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
-			rc = fseek(fp, fp_offset, SEEK_SET);
-			lite_assert(rc == 0);
-			rc = fread((uint8_t*)shmem+buf_pgs[i]*page_size, page_size, 1, fp);
-			printf("request[%d] %lx at host %lx.\n", i, (unsigned long)buf_pgs[i], (unsigned long)segv_addr);
 		}
 		int written = write(uvmem_fd, buf_pgs, len);
 		if (written < len) {
@@ -980,7 +1009,7 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 
 FILE *fp_guest_mem;
 
-void init_uvmem(FILE *fp, uint32_t last_guest_range_end)
+void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 {
 	// liang: use uvmem to load pages on demand
 	int uvmem_fd = open(DEV_UVMEM, O_RDWR);
@@ -994,6 +1023,8 @@ void init_uvmem(FILE *fp, uint32_t last_guest_range_end)
 	int npages = (round_size - GUEST_ADDR_START) / page_size;
 	// struct uvmem_init uinit = {
 	// 	.size = npages * page_size,
+	// 	.padding = 0,
+	// 	.shmem_fd = 0
 	// };
 	struct uvmem_init uinit;
 	uinit.size = npages * page_size;
@@ -1016,8 +1047,19 @@ void init_uvmem(FILE *fp, uint32_t last_guest_range_end)
 	if (child < 0) {
 		err(EXIT_FAILURE, "fork");
 	} else if (child == 0) {
+		// page server process
+		// unmap vm pages
+		int rc;
+		rc = munmap((void*)HOST_ADDR_START, HOST_PHYS_MEM_SIZE);
+		if (rc) {
+			err(EXIT_FAILURE, "Fail munmap guest-host memory mapping region.");
+			lite_assert(rc == 0);
+		}
+		close(zvm->get_kvmfd());
+		close(zvm->get_vmfd());
 		serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
 	} else {
+		printf("uvmem server process id %d\n", child);
 		void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
 		 			uvmem_fd, 0);
 		if (ram == MAP_FAILED) {
@@ -1185,7 +1227,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	lite_assert(idt_page != NULL);
 
 	if (DYNAMIC_MAPPER) {
-		init_uvmem(fp, last_guest_range_end);
+		init_uvmem(this, fp, last_guest_range_end);
 	}
 
 	// End of memory loading
@@ -1207,16 +1249,14 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 		lite_assert(ptr->gdt_page);
 	}
 
-	if (DYNAMIC_MAPPER) {
-		
-
+	// if (DYNAMIC_MAPPER) {
 	// 	// segv_load_all();
 	// 	void *desired_host_phys_addr = (void*) HOST_ADDR_START;
 	// 	rc = mprotect(desired_host_phys_addr, host_phys_memory_size, PROT_NONE);
 	// 	lite_assert(rc==0);
 	// 	// segv_load_addr((void*)0x28003000);
 	// 	// segv_load_addr((void*)0x28153000);	
-	}
+	// }
 
 	fclose(fp);
 	fclose(fp_swap);
