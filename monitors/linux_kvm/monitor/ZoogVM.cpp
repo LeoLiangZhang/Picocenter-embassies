@@ -980,6 +980,53 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 
 FILE *fp_guest_mem;
 
+void init_uvmem(FILE *fp, uint32_t last_guest_range_end)
+{
+	// liang: use uvmem to load pages on demand
+	int uvmem_fd = open(DEV_UVMEM, O_RDWR);
+	if (uvmem_fd < 0) {
+		perror("can't open "DEV_UVMEM);
+		exit(EXIT_FAILURE);
+	}
+	long page_size = sysconf(_SC_PAGESIZE);
+	printf("_SC_PAGESIZE = %ld\n", page_size);
+	int round_size = MemSlot::round_up_to_page(last_guest_range_end);
+	int npages = (round_size - GUEST_ADDR_START) / page_size;
+	// struct uvmem_init uinit = {
+	// 	.size = npages * page_size,
+	// };
+	struct uvmem_init uinit;
+	uinit.size = npages * page_size;
+	uinit.padding = 0;
+	uinit.shmem_fd = 0;
+	if (ioctl(uvmem_fd, UVMEM_INIT, &uinit) < 0) {
+		err(EXIT_FAILURE, "UVMEM_INIT");
+	}
+
+	int shmem_fd = uinit.shmem_fd;
+	size_t uvmem_size = uinit.size;
+	lite_assert(uvmem_size == (size_t)(npages * page_size));
+	if (ftruncate(shmem_fd, uvmem_size) < 0) {
+		err(EXIT_FAILURE, "truncate(\"shmem_fd\")");
+	}
+	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
+	fflush(stdout);
+
+	pid_t child = fork();
+	if (child < 0) {
+		err(EXIT_FAILURE, "fork");
+	} else if (child == 0) {
+		serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
+	} else {
+		void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
+		 			uvmem_fd, 0);
+		if (ram == MAP_FAILED) {
+			err(EXIT_FAILURE, "client: mmap");
+		}
+		close(uvmem_fd);
+	}
+}
+
 void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 {
 	const char *corefile = "kvm.core";
@@ -1138,49 +1185,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	lite_assert(idt_page != NULL);
 
 	if (DYNAMIC_MAPPER) {
-		// liang: use uvmem to load pages on demand
-		int uvmem_fd = open(DEV_UVMEM, O_RDWR);
-		if (uvmem_fd < 0) {
-			perror("can't open "DEV_UVMEM);
-			exit(EXIT_FAILURE);
-		}
-		long page_size = sysconf(_SC_PAGESIZE);
-		printf("_SC_PAGESIZE = %ld\n", page_size);
-		int round_size = MemSlot::round_up_to_page(last_guest_range_end);
-		int npages = (round_size - GUEST_ADDR_START) / page_size;
-		// struct uvmem_init uinit = {
-		// 	.size = npages * page_size,
-		// };
-		struct uvmem_init uinit;
-		uinit.size = npages * page_size;
-		uinit.padding = 0;
-		uinit.shmem_fd = 0;
-		if (ioctl(uvmem_fd, UVMEM_INIT, &uinit) < 0) {
-			err(EXIT_FAILURE, "UVMEM_INIT");
-		}
-
-		int shmem_fd = uinit.shmem_fd;
-		size_t uvmem_size = uinit.size;
-		lite_assert(uvmem_size == (size_t)(npages * page_size));
-		if (ftruncate(shmem_fd, uvmem_size) < 0) {
-			err(EXIT_FAILURE, "truncate(\"shmem_fd\")");
-		}
-		printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
-		fflush(stdout);
-
-		pid_t child = fork();
-		if (child < 0) {
-			err(EXIT_FAILURE, "fork");
-		} else if (child == 0) {
-			serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
-		} else {
-			void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
-			 			uvmem_fd, 0);
-			if (ram == MAP_FAILED) {
-				err(EXIT_FAILURE, "client: mmap");
-			}
-			close(uvmem_fd);
-		}
+		init_uvmem(fp, last_guest_range_end);
 	}
 
 	// End of memory loading
