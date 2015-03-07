@@ -8,6 +8,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "uvmem.h"
 
@@ -29,7 +30,7 @@ struct pages {
 static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
 	int nr_pages = size / page_size;
-
+	printf("shmem_fd %d\n", shmem_fd);
 	void* shmem = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED,
 			   shmem_fd, 0);
 	if (shmem == MAP_FAILED) {
@@ -149,6 +150,21 @@ static void client(int uvmem_fd, size_t size, size_t page_size)
 	munmap(ram, size);
 }
 
+struct server_arg
+{
+	int uvmem_fd;
+	int shmem_fd;
+	size_t size;
+	size_t page_size;
+};
+
+void *thread_server(void *arg)
+{
+	struct server_arg *sarg = (struct server_arg*)arg;
+	server(sarg->uvmem_fd, sarg->shmem_fd, sarg->size, sarg->page_size);
+	return NULL;
+}
+
 int main(int argc, char **argv)
 {
 
@@ -178,6 +194,8 @@ int main(int argc, char **argv)
 	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
 	fflush(stdout);
 
+#if 1
+	// fork based
 	pid_t child = fork();
 	if (child < 0) {
 		err(EXIT_FAILURE, "fork");
@@ -188,8 +206,26 @@ int main(int argc, char **argv)
 		server(uvmem_fd, shmem_fd, size, page_size);
 		return 0;
 	}
+#else
+	pthread_t server_thread;
+	pthread_attr_t attr; int rc;
+	struct server_arg sarg = {
+		.uvmem_fd = uvmem_fd,
+		.shmem_fd = shmem_fd,
+		.size = size,
+		.page_size = page_size,
+	};
 
-	printf("qemu pid: %d server pid: %d\n", getpid(), child);
+	rc = pthread_attr_init(&attr);
+	if (rc) 
+		err(EXIT_FAILURE, "pthread_attr_init");
+	rc = pthread_create(&server_thread, &attr, thread_server, &sarg);
+	if (rc)
+		err(EXIT_FAILURE, "pthread_create");
+#endif
+
+
+	// printf("qemu pid: %d server pid: %d\n", getpid(), child);
 	close(shmem_fd);
 	// sleep(1);	
 	/* wait the daemon is ready

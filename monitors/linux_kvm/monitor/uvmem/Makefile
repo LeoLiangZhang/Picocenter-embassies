@@ -30,7 +30,7 @@ all : build
 .PHONY : all clean build rmmod chown insmod
 
 testbin :
-	gcc -g -o uvmem_test uvmem_test.c
+	gcc -g -o uvmem_test uvmem_test.c -lpthread
 
 test : testbin
 	./uvmem_test
