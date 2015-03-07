@@ -717,80 +717,6 @@ void sync_ckpt_mmap()
 }
 #endif
 
-unsigned long nginx_pages[] = {
-	0x28001000,
-	0x28011000,
-	0x28012000,
-	0x280ce000,
-	0x280d6000,
-	0x280e2000,
-	0x280e3000,
-	0x280f0000,
-	0x280f1000,
-	0x280f2000,
-	0x280f3000,
-	0x280f4000,
-	0x280f5000,
-	0x280f6000,
-	0x280f7000,
-	0x280f8000,
-	0x280f9000,
-	0x280fa000,
-	0x280fb000,
-	0x280fc000,
-	0x280fd000,
-	0x28103000,
-	0x2810c000,
-	0x28113000,
-	0x2812b000,
-	0x2812c000,
-	0x28130000,
-	0x28131000,
-	0x28132000,
-	0x28150000,
-	0x28151000,
-	0x28152000,
-	0x2816e000,
-	0x28173000,
-	0x28174000,
-	0x28175000,
-	0x28176000,
-	0x2817e000,
-	0x28182000,
-	0x281ae000,
-	0x281af000,
-	0x281b0000,
-	0x281b1000,
-	0x28376000,
-	0x28378000,
-	0x28379000,
-	0x2837b000,
-	0x2845f000,
-	0x2846c000,
-	0x2846e000,
-	0x28477000,
-	0x2847b000,
-	0x2847c000,
-	0x2847d000,
-	0x28483000,
-	0x28484000,
-	0x28485000,
-	0x28488000,
-	0x2848b000,
-	0x28772000,
-	0x290d6000,
-	0x290d7000,
-	0x298d6000,
-	0x298d7000,
-	0x298da000,
-	0x2a0da000,
-	0x2a0dd000,
-	0x2c08a000,
-	0x2c0a0000,
-	0x2c265000,
-	0x2c288000,
-};
-
 #define HASH_CHAR_LENGTH (SHA_DIGEST_LENGTH*2+1)
 char *get_hash_str(const unsigned char *d, size_t n, char *hash_s)
 {
@@ -839,14 +765,6 @@ void read_dirty_log(uint8_t *bitmap, int size)
 		i += sizeof(long);
 	}
 	printf("Allocated %d bytes bitmap and updated %ld pages.\n", size, count);
-
-	printf("\n====== PRINT NGINX PAGES =======\n");
-	for (i = 0; i < (int)(sizeof(nginx_pages)/sizeof(nginx_pages[0])); i++) {
-		char hash_s[HASH_CHAR_LENGTH];
-		get_hash_str((const unsigned char*)nginx_pages[i], PAGE_SIZE, hash_s);
-		printf("host page 0x%lx, hash %s\n", nginx_pages[i], hash_s);
-	};
-	printf("======     END PRINTING  =======\n");
 }
 
 void print_dirty_log(int vmfd)
