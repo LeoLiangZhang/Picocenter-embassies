@@ -5,5 +5,5 @@ define pico_symbols
 end
 
 # monitor child processes
-set detach-on-fork off
+#set detach-on-fork off
 

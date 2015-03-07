@@ -18,6 +18,9 @@
 #include <err.h>
 #include "uvmem/uvmem.h"
 
+// liang: print page hash value
+#include <openssl/sha.h>
+
 // liang: Python support for page-serving process
 #include <python2.6/Python.h>
 
@@ -714,12 +717,98 @@ void sync_ckpt_mmap()
 }
 #endif
 
+unsigned long nginx_pages[] = {
+	0x28001000,
+	0x28011000,
+	0x28012000,
+	0x280ce000,
+	0x280d6000,
+	0x280e2000,
+	0x280e3000,
+	0x280f0000,
+	0x280f1000,
+	0x280f2000,
+	0x280f3000,
+	0x280f4000,
+	0x280f5000,
+	0x280f6000,
+	0x280f7000,
+	0x280f8000,
+	0x280f9000,
+	0x280fa000,
+	0x280fb000,
+	0x280fc000,
+	0x280fd000,
+	0x28103000,
+	0x2810c000,
+	0x28113000,
+	0x2812b000,
+	0x2812c000,
+	0x28130000,
+	0x28131000,
+	0x28132000,
+	0x28150000,
+	0x28151000,
+	0x28152000,
+	0x2816e000,
+	0x28173000,
+	0x28174000,
+	0x28175000,
+	0x28176000,
+	0x2817e000,
+	0x28182000,
+	0x281ae000,
+	0x281af000,
+	0x281b0000,
+	0x281b1000,
+	0x28376000,
+	0x28378000,
+	0x28379000,
+	0x2837b000,
+	0x2845f000,
+	0x2846c000,
+	0x2846e000,
+	0x28477000,
+	0x2847b000,
+	0x2847c000,
+	0x2847d000,
+	0x28483000,
+	0x28484000,
+	0x28485000,
+	0x28488000,
+	0x2848b000,
+	0x28772000,
+	0x290d6000,
+	0x290d7000,
+	0x298d6000,
+	0x298d7000,
+	0x298da000,
+	0x2a0da000,
+	0x2a0dd000,
+	0x2c08a000,
+	0x2c0a0000,
+	0x2c265000,
+	0x2c288000,
+};
+
+#define HASH_CHAR_LENGTH (SHA_DIGEST_LENGTH*2+1)
+char *get_hash_str(const unsigned char *d, size_t n, char *hash_s)
+{
+	unsigned char hash[SHA_DIGEST_LENGTH];
+	unsigned char *rc = SHA1(d, n, hash);
+	lite_assert(rc);
+	for(int i = 0; i < SHA_DIGEST_LENGTH; i++) {
+		sprintf(hash_s+i*2, "%02X", hash[i]);
+	}
+	return hash_s;
+}
+
 void read_dirty_log(uint8_t *bitmap, int size)
 {
 	int i = 0, p;
 	unsigned long val = 0;
 	long page_start = 0;//GUEST_ADDR_START;
-	long page = 0, count = 0, print_cut = 100;
+	unsigned long page = 0, count = 0, print_cut = 100;
 	while (i < size) {
 		// long in 32bit process is 4 bytes while it's 8 bytes in 64bit.
 		// I am using 64bit kernel, and kernel use long type for bitmap ops.
@@ -731,26 +820,43 @@ void read_dirty_log(uint8_t *bitmap, int size)
 
 		while((p = ffsl(val))) {
 			page = page_start + (i*8+p-1)*PAGE_SIZE;
-			if (count < print_cut)
-				printf("Byte offset %d, Updated page 0x%lx\n", i, page);
-			else if (count == print_cut)
+			unsigned long host_page = page + HOST_ADDR_START;
+			if (count < print_cut) {
+#if PRINT_PAGE_HASH
+				char hash_s[HASH_CHAR_LENGTH];
+				get_hash_str((const unsigned char*)host_page, PAGE_SIZE, hash_s);
+				printf("Byte offset %d, updated virtual page 0x%lx, host page 0x%lx, hash %s\n", i, page, host_page, hash_s);				
+#else
+				printf("Byte offset %d, updated virtual page 0x%lx, host page 0x%lx\n", i, page, host_page);
+#endif
+			}
+			else if (count == print_cut) {
 				printf("This section has updated more than %ld pages.\n", print_cut);
+			}
 			val = val & ~(1UL << (p-1));
 			count++;
 		}
 		i += sizeof(long);
 	}
 	printf("Allocated %d bytes bitmap and updated %ld pages.\n", size, count);
+
+	printf("\n====== PRINT NGINX PAGES =======\n");
+	for (i = 0; i < (int)(sizeof(nginx_pages)/sizeof(nginx_pages[0])); i++) {
+		char hash_s[HASH_CHAR_LENGTH];
+		get_hash_str((const unsigned char*)nginx_pages[i], PAGE_SIZE, hash_s);
+		printf("host page 0x%lx, hash %s\n", nginx_pages[i], hash_s);
+	};
+	printf("======     END PRINTING  =======\n");
 }
 
-void ZoogVM::checkpoint()
+void print_dirty_log(int vmfd)
 {
 	// sync_ckpt_mmap();
-	int size = host_phys_memory_size;
+	int size = HOST_PHYS_MEM_SIZE;
 	// size = 0x11389000 + 4096*1;
 	int nbyte = ((GUEST_ADDR_START + size-1) / PAGE_SIZE / 8) + 1;
-	uint8_t *dlog_buf = (uint8_t*)mf_malloc(mf, nbyte);
-	// uint8_t *dlog_buf = (uint8_t*)malloc(nbyte);
+	// uint8_t *dlog_buf = (uint8_t*)mf_malloc(mf, nbyte);
+	uint8_t *dlog_buf = (uint8_t*)malloc(nbyte);
 	lite_assert(dlog_buf);
 	// uint8_t dlog_buf[nbyte];
 	memset(dlog_buf, 0, nbyte);
@@ -762,8 +868,13 @@ void ZoogVM::checkpoint()
 	int rc = ioctl(vmfd, KVM_GET_DIRTY_LOG, &dlog);
 	lite_assert(rc == 0);
 	read_dirty_log((uint8_t*)dlog.dirty_bitmap, nbyte);
-	mf_free(mf, dlog_buf);
-	// free(dlog_buf);
+	// mf_free(mf, dlog_buf);
+	free(dlog_buf);
+}
+
+void ZoogVM::checkpoint()
+{
+	print_dirty_log(vmfd);
 	return; 
 
 	const char *corefile = "kvm.core";
@@ -977,10 +1088,19 @@ void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
 		rc = fseek(fp, fp_offset, SEEK_SET);
 		lite_assert(rc == 0);
 		rc = fread((uint8_t*)shmem+pg*page_size, page_size, 1, fp);
-		printf("page %lx at host %lx.\n", (unsigned long)pg, (unsigned long)segv_addr);
+		lite_assert(rc);
+
+#if PRINT_PAGE_HASH
+		char hash_s[HASH_CHAR_LENGTH];
+		get_hash_str((uint8_t*)shmem+pg*page_size, page_size, hash_s);
+		printf("page 0x%lx, host 0x%lx, hash %s\n", (unsigned long)pg, (unsigned long)segv_addr, hash_s);
+#else
+		printf("page 0x%lx, host 0x%lx\n", (unsigned long)pg, (unsigned long)segv_addr);
+#endif
+
 	} else {
 		memset((uint8_t*)shmem+pg*page_size, 0, page_size);
-		printf("page %lx at host %lx, page not found, fill with zeros.\n", (unsigned long)pg, (unsigned long)segv_addr);
+		printf("page 0x%lx, host 0x%lx, page not found filling zeros\n", (unsigned long)pg, (unsigned long)segv_addr);
 	}
 }
 
