@@ -1024,10 +1024,10 @@ void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
 
 void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
-	Py_SetProgramName((char*)"zoog_kvm_monitor");  /* optional but recommended */
-	Py_Initialize();
-	PyRun_SimpleString("from time import time,ctime\n"
-		"print 'Today is',ctime(time())\n");
+	// Py_SetProgramName((char*)"zoog_kvm_monitor");  /* optional but recommended */
+	// Py_Initialize();
+	// PyRun_SimpleString("from time import time,ctime\n"
+	// 	"print 'Today is',ctime(time())\n");
 
 	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
 	int len, n_pages=0, nr, i;
@@ -1058,10 +1058,27 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 		}
 		n_pages += nr;
 	}
-	exit(0);
+	printf("Exit uvmem serving loop.\n");
+	munmap(shmem, size);
+	close(uvmem_fd);
+	// exit(0);
 }
 
-FILE *fp_guest_mem;
+struct uvmem_server_arg
+{
+	FILE *fp; // file pointer to saved pages
+	int uvmem_fd;
+	int shmem_fd;
+	size_t size; // uvmem mapping sized
+	size_t page_size;
+};
+
+void *serve_uvmem_pages_thread(void *arg)
+{
+	struct uvmem_server_arg *sarg = (struct uvmem_server_arg*)arg;
+	serve_uvmem_pages(sarg->fp, sarg->uvmem_fd, sarg->shmem_fd, sarg->size, sarg->page_size);
+	return NULL;
+}
 
 void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 {
@@ -1097,6 +1114,8 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
 	fflush(stdout);
 
+#if 0
+	// fork style uvmem processes
 	pid_t child = fork();
 	if (child < 0) {
 		err(EXIT_FAILURE, "fork");
@@ -1121,7 +1140,34 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		}
 		close(uvmem_fd);
 	}
+#else
+	pthread_t server_thread;
+	pthread_attr_t attr; int rc;
+	struct uvmem_server_arg sarg;
+	sarg.fp = fp;
+	sarg.uvmem_fd = uvmem_fd;
+	sarg.shmem_fd = shmem_fd;
+	sarg.size = uvmem_size;
+	sarg.page_size = page_size;
+	
+	rc = pthread_attr_init(&attr);
+	if (rc) 
+		err(EXIT_FAILURE, "pthread_attr_init");
+	rc = pthread_create(&server_thread, &attr, serve_uvmem_pages_thread, &sarg);
+	printf("Thread id %u\n", (unsigned int)server_thread);
+	if (rc)
+		err(EXIT_FAILURE, "pthread_create");
+
+	// mapped client range
+	void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
+	 			uvmem_fd, 0);
+	if (ram == MAP_FAILED) {
+		err(EXIT_FAILURE, "client: mmap");
+	}
+#endif
 }
+
+// FILE *fp_guest_mem;
 
 void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 {
@@ -1312,6 +1358,8 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	// 	// segv_load_addr((void*)0x28153000);	
 	// }
 
-	fclose(fp);
+	if (!DYNAMIC_MAPPER) {
+		fclose(fp);
+	}
 	fclose(fp_swap);
 }
