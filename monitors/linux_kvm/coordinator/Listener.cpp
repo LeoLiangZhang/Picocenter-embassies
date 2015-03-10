@@ -29,6 +29,8 @@ using namespace std;
 
 #define MONITOR_PATH	ZOOG_ROOT "/monitors/linux_kvm/monitor/build/zoog_kvm_monitor"
 
+#define ENABLE_GRAPHIC 0
+
 Listener::Listener(MallocFactory *mf)
 	: mf(mf),
 	  sf(new SyncFactory_Pthreads()),
@@ -39,10 +41,13 @@ Listener::Listener(MallocFactory *mf)
 
 	sockaddr_to_app_table = new Table(mf);
 
+	// liang: control Graphic related features.
+#if ENABLE_GRAPHIC
+	printf("liang: Enable graphic features.");
 	ThreadFactory* tf = new ThreadFactory_Pthreads();
 	Xblit *xblit = new Xblit(tf, sf);
 	blitter_mgr = new BlitterManager(xblit, mf, sf, crypto.get_random_supply());
-
+#endif
 	router = new Router(sf, mf, &tunid);
 
 	long_message_allocator = new LongMessageAllocator(mf, sf, true, &tunid);
@@ -196,8 +201,10 @@ void Listener::reconnect(Message *msg, CMReconnect *conn)
 	App *app = new App(this, pub_key, msg, conn->ifconfigs);
 	sockaddr_to_app_table->insert(saddr, app);
 
+#if ENABLE_GRAPHIC
 	blitter_mgr->register_palifc(app);
 	blitter_mgr->new_toplevel_viewport(app->get_id());
+#endif
 }
 
 void Listener::connect(Message *msg, CMConnect *conn)
@@ -218,8 +225,10 @@ void Listener::connect(Message *msg, CMConnect *conn)
 	SockaddrHashable *saddr = new SockaddrHashable(msg->get_remote_addr(), msg->get_remote_addr_len());
 	sockaddr_to_app_table->insert(saddr, app);
 
+#if ENABLE_GRAPHIC
 	blitter_mgr->register_palifc(app);
 	blitter_mgr->new_toplevel_viewport(app->get_id());
+#endif
 }
 
 void Listener::launch_application(CMLaunchApplication *la)
@@ -409,7 +418,11 @@ void Listener::unmap_canvas(Message *msg, CMUnmapCanvas * hdr)
 
 void Listener::update_canvas(CMUpdateCanvas *hdr)
 {
+#if ENABLE_GRAPHIC
 	blitter_mgr->get_canvas(hdr->canvas_id)->update_canvas(&hdr->rectangle);
+#else
+	fprintf(stderr, "Graphic disabled: update_canvas\n");
+#endif
 }
 
 void Listener::extn_debug_create_toplevel_window(Message *msg, CMExtnDebugCreateToplevelWindow * hdr)
@@ -462,5 +475,9 @@ void Listener::disconnect(App *app)
 
 	get_router()->disconnect_app(app);
 	sockaddr_to_app_table->remove_right(app);
+
+	// liang: disable graphic
+#if ENABLE_GRAPHIC
 	blitter_mgr->unregister_palifc(app->as_palifc());
+#endif
 }
