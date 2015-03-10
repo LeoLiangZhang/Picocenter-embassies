@@ -27,6 +27,8 @@ struct pages {
 	uint64_t pgoffs[0];
 };
 
+void *shared_mem;
+
 static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
 	int nr_pages = size / page_size;
@@ -37,6 +39,7 @@ static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 		err(EXIT_FAILURE, "server: mmap(\"shmem\")");
 	}
 	close(shmem_fd);
+	// void *shmem = shared_mem;
 
 	ssize_t bufsize = nr_pages * sizeof(uint64_t);
 	struct pages *page_request = malloc(sizeof(*page_request) + bufsize);
@@ -120,15 +123,16 @@ static void server(int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 
 static void client(int uvmem_fd, size_t size, size_t page_size)
 {
-	DPRINTF("mmap\n");
-	void *ram = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE,
-			 uvmem_fd, 0);
-	if (ram == MAP_FAILED) {
-		err(EXIT_FAILURE, "client: mmap");
-	}
+	// DPRINTF("mmap\n");
+	// void *ram = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE,
+	// 		 uvmem_fd, 0);
+	// if (ram == MAP_FAILED) {
+	// 	err(EXIT_FAILURE, "client: mmap");
+	// }
+	void *ram = shared_mem;
 
 	DPRINTF("close\n");
-	close(uvmem_fd);
+	// close(uvmem_fd);
 
 	/* do some tasks on the uvmem area */
 	int pages[] = {7, 1, 6, 2, 0, 5, 3, 4};
@@ -194,7 +198,7 @@ int main(int argc, char **argv)
 	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
 	fflush(stdout);
 
-#if 1
+#if 0
 	// fork based
 	pid_t child = fork();
 	if (child < 0) {
@@ -207,6 +211,16 @@ int main(int argc, char **argv)
 		return 0;
 	}
 #else
+
+	DPRINTF("mmap\n");
+	void *ram = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE,
+			 uvmem_fd, 0);
+	if (ram == MAP_FAILED) {
+		err(EXIT_FAILURE, "client: mmap");
+	}
+	shared_mem = ram;
+
+
 	pthread_t server_thread;
 	pthread_attr_t attr; int rc;
 	struct server_arg sarg = {
@@ -220,13 +234,14 @@ int main(int argc, char **argv)
 	if (rc) 
 		err(EXIT_FAILURE, "pthread_attr_init");
 	rc = pthread_create(&server_thread, &attr, thread_server, &sarg);
+	printf("Thread id %u\n", (unsigned int)server_thread);
 	if (rc)
 		err(EXIT_FAILURE, "pthread_create");
 #endif
 
 
 	// printf("qemu pid: %d server pid: %d\n", getpid(), child);
-	close(shmem_fd);
+	// close(shmem_fd);
 	// sleep(1);	
 	/* wait the daemon is ready
 			 * To make it sure, communication with the server

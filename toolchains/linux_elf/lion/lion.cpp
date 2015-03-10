@@ -140,6 +140,7 @@ int main1(int argc, char**argv)
     fflush(stdout);
     sleep(1);
   }
+  return 0;
 }
 
 int main(int argc, char**argv)
