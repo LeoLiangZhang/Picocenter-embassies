@@ -29,5 +29,6 @@ public:
 	bool wait_for_core;
 		// on catastrophe, if true, waits to produce core;
 		// if false, no core; noninteractive exit
-	const char *core_file;
+	const char *swap_file;
+	bool is_resume;
 };

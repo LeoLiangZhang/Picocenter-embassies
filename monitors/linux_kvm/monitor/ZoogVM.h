@@ -130,6 +130,8 @@ public:
 	// liang: ZoogVM checkpoint and restore
 	void checkpoint();
 	void resume();
+
+	void set_swapfile(const char *filename);
 	
 
 
@@ -181,6 +183,9 @@ private:
 	MonitorCrypto crypto;
 
 	CallCounts call_counts;
+
+	char *swapfile;
+	char *pagefile;
 
 	// private functions
 

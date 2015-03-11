@@ -589,6 +589,22 @@ void ZoogVM::_resume_all()
 	}
 }
 
+void ZoogVM::set_swapfile(const char *filename)
+{
+	int len = strlen(filename);
+	swapfile = (char*)malloc(len+1);
+	if(!swapfile)
+		err(EXIT_FAILURE, "cannot allocate space for swapfile.");
+	memcpy(swapfile, filename, len+1);
+	const char *page_suffix = ".page";
+	int len2 = strlen(page_suffix);
+	pagefile = (char*)malloc(len+len2+1);
+	if(!pagefile)
+		err(EXIT_FAILURE, "cannot allocate space for pagefile.");
+	memcpy(pagefile, filename, len);
+	memcpy(pagefile+len, page_suffix, len2+1);
+}
+
 void ZoogVM::emit_corefile(FILE *fp)
 {
 	CoreFile c;
@@ -796,7 +812,7 @@ void ZoogVM::checkpoint()
 	return; 
 
 	const char *corefile = "kvm.core";
-	const char *swapfile = "kvm.swap";
+	// const char *swapfile = "kvm.swap";
 
 	fprintf(stderr, "Checkpointing...\n");
 	FILE *fp;
@@ -1171,8 +1187,9 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 
 void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 {
+	set_swapfile(core_file);
 	const char *corefile = "kvm.core";
-	const char *swapfile = "kvm.swap";
+	// const char *swapfile = "kvm.swap";
 
 	fprintf(stderr, "Resume from core file: %s\n", core_file);
 

@@ -49,6 +49,8 @@ schroot -- bash -c "cd /elasticity/embassies/ && ZOOG_TUNID=2 ./monitors/linux_k
 
 wait-for-core ::= ture | false  # request coredump when error
 
+ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --wait-for-core false --swap-file kvm.swap --resume
+
 ## GDB: debugging in chroot'ed env
 
 cd /elasticity/embassies/

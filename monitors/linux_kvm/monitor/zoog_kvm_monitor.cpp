@@ -190,12 +190,13 @@ int main(int argc, const char **argv)
 	ambient_malloc_init(mf);
 
 	// liang: resume process
-	if (args.core_file)
+	if (args.is_resume)
 	{
-		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core, args.core_file);
+		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core, args.swap_file);
 		zvm->resume();
 	} else {
 		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
+		zvm->set_swapfile(args.swap_file);
 		load_elf_pal(zvm,
 			(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");
 
