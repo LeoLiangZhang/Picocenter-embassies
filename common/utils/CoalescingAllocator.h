@@ -167,12 +167,18 @@ public:
 	ByStartTree *dbg_peek_allocated_tree() { return allocated_tree; }
 	ByStartTree *dbg_peek_free_by_start_tree() { return free_by_start_tree; }
 
+	// liang: return number of ranges that have allocated
+	uint32_t get_range_count() { return range_count; }
+
 private:
 	void _check_no_overlap(Range new_range, ByStartTree *tree);
 	void _insert_coalesced_free_range(Range range);
 	void _remove_free_range_by_start_elt(RangeByStartElt *start_elt);
 	void _create_empty_range_nolock(Range range);
 	void _free_subrange(RangeByStartElt *allocated, Range overlap);
+
+	// liang: count allocated ranges
+	uint32_t range_count;
 
 	bool allow_redundant_frees;
 	SyncFactoryMutex *mutex;

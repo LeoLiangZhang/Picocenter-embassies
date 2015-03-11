@@ -1,5 +1,7 @@
 #!/bin/bash
 
+uname -r |grep -E '^3.13' >/dev/null && echo "#define USE_SYSMAP"
+
 for i in "$@"
 do
 	line=$(sudo cat /boot/System.map-`uname -r` |grep -E "\b$i\b")

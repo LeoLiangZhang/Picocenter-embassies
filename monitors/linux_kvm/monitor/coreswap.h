@@ -29,9 +29,18 @@ struct swap_vm {
 	uint8_t pub_key_serialized[0]; // swap_vm.pub_key_size 
 };
 
+struct swap_segment
+{
+	uint32_t vaddr;
+	uint32_t size;
+	uint32_t offset; // file offset of the data
+};
+
 struct swap_file_header {
 	uint32_t swap_vm_size;
 	uint32_t thread_count;
+	uint32_t segment_count;
 	struct swap_vm vm[0];
 	struct swap_thread threads[0]; // for ease of access 
+	struct swap_segment segments[0];
 };

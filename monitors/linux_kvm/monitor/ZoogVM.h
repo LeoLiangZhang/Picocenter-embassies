@@ -132,6 +132,9 @@ public:
 	void resume();
 
 	void set_swapfile(const char *filename);
+	uint8_t *guest_to_host_addr(uint8_t *guest_addr) {
+		return host_phys_memory + (uint32_t)guest_addr;
+	};
 	
 
 
@@ -197,7 +200,7 @@ private:
 	void _resume_coordinator(ZPubKey *pub_key, XIPifconfig *ifconfigs);
 
 	void _emit_corefile(FILE *fp);
-	void _emit_swapfile(FILE *fp);
+	void _emit_swapfile();
 
 	void _load_swap(const char *core_file, struct swap_vm **out_vm);
 };

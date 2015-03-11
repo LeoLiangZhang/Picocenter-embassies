@@ -110,6 +110,8 @@ CoalescingAllocator::CoalescingAllocator(SyncFactory *sf, bool allow_redundant_f
 	free_by_size_tree = new BySizeTree(sf);
 	free_by_start_tree = new ByStartTree(sf);
 	allocated_tree = new ByStartTree(sf);
+
+	range_count = 0;
 }
 
 CoalescingAllocator::~CoalescingAllocator()
@@ -249,6 +251,7 @@ bool CoalescingAllocator::allocate_range(uint32_t size, UserObjIfc *user_obj, Ra
 			consumed_range, refcounted_user_obj);
 
 		allocated_tree->insert(user_range);
+		range_count ++;
 
 		delete smallest_suitable_range;
 		delete corresponding_range_by_start;
@@ -294,6 +297,7 @@ bool CoalescingAllocator::allocate_range_at(uint32_t guest_addr, uint32_t size, 
 		consumed_range, refcounted_user_obj);
 
 	allocated_tree->insert(user_range);
+	range_count++;
 
 	if (leftover_range.size()>0)
 	{
@@ -334,6 +338,7 @@ UserObjIfc *CoalescingAllocator::lookup_value(uint32_t value, Range *out_range)
 void CoalescingAllocator::_free_subrange(RangeByStartElt *allocated, Range overlap)
 {
 	allocated_tree->remove(allocated);
+	range_count--;
 
 	Range allocated_range = allocated->getKey().get_range();
 	Range left(allocated_range.start, overlap.start);
@@ -345,6 +350,7 @@ void CoalescingAllocator::_free_subrange(RangeByStartElt *allocated, Range overl
 		RangeByStartElt *left_fragment =
 			new RangeByStartElt(left, allocated->refcounted_user_obj);
 		allocated_tree->insert(left_fragment);
+		range_count++;
 	}
 
 	if (right.size()>0)
@@ -352,6 +358,7 @@ void CoalescingAllocator::_free_subrange(RangeByStartElt *allocated, Range overl
 		RangeByStartElt *right_fragment =
 			new RangeByStartElt(right, allocated->refcounted_user_obj);
 		allocated_tree->insert(right_fragment);
+		range_count++;
 	}
 	// That done, we now give up the original reference.
 	delete allocated;
