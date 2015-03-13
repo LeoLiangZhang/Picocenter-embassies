@@ -1054,6 +1054,7 @@ void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
 		long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
 		rc = fseek(fp, fp_offset, SEEK_SET);
 		lite_assert(rc == 0);
+		fprintf(stderr, "load_page_at.fread(host_addr=%x)\n", (unsigned int)((uint8_t*)shmem+pg*page_size));
 		rc = fread((uint8_t*)shmem+pg*page_size, page_size, 1, fp);
 		lite_assert(rc);
 
@@ -1087,10 +1088,12 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	if (shmem == MAP_FAILED) {
 		err(EXIT_FAILURE, "server: mmap(\"shmem\")");
 	}
+	close(shmem_fd);
 	
 	fprintf(stderr, "Serving pages at %x\n", (uint32_t)shmem);
 
 	while (n_pages < nr_pages) {
+		fprintf(stderr, "read(uvmem_fd)\n");
 		len = read(uvmem_fd, buf_pgs, sizeof(buf_pgs));
 		if (len < 0) {
 			err(EXIT_FAILURE, "server: read");
@@ -1164,7 +1167,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
 	fflush(stdout);
 
-#if 0
+#if 1
 	// fork style uvmem processes
 	pid_t child = fork();
 	if (child < 0) {
@@ -1191,6 +1194,13 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		close(uvmem_fd);
 	}
 #else
+	// mapped client range
+	void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
+	 			uvmem_fd, 0);
+	if (ram == MAP_FAILED) {
+		err(EXIT_FAILURE, "client: mmap");
+	}
+
 	pthread_t server_thread;
 	pthread_attr_t attr; int rc;
 	struct uvmem_server_arg sarg;
@@ -1208,12 +1218,6 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 	if (rc)
 		err(EXIT_FAILURE, "pthread_create");
 
-	// mapped client range
-	void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
-	 			uvmem_fd, 0);
-	if (ram == MAP_FAILED) {
-		err(EXIT_FAILURE, "client: mmap");
-	}
 #endif
 }
 

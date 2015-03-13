@@ -11,7 +11,7 @@ SYSMAP_SYMBOLS = shmem_zero_setup
 uvmem_sysmap.h :
 	/bin/bash make_uvmem_sysmap.sh $(SYSMAP_SYMBOLS) > $@
 
-uvmem.ko : uvmem_sysmap.h
+uvmem.ko : uvmem_sysmap.h uvmem.c uvmem.h
 	$(MAKE) -C $(KDIR) M=$$PWD
 
 build : uvmem.ko

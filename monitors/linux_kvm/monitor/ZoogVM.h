@@ -46,7 +46,7 @@ class VCPUPool;
 #define GUEST_ADDR_START 0x10001000
 #define HOST_ADDR_START 0x18000000
 #define DEV_UVMEM	"/dev/uvmem"
-#define PRINT_PAGE_HASH 1
+#define PRINT_PAGE_HASH 0
 
 class ZoogVM : public MemoryMapIfc {
 public:

@@ -108,8 +108,8 @@ static void uvmem_release_fake_vmf(int ret, struct vm_fault *fake_vmf)
 }
 
 static int uvmem_minor_fault(struct uvmem *uvmem,
-			    struct vm_area_struct *vma,
-			    struct vm_fault *vmf)
+				struct vm_area_struct *vma,
+				struct vm_fault *vmf)
 {
 	struct vm_fault fake_vmf;
 	int ret;
@@ -231,7 +231,7 @@ static int uvmem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	 * requested multiple times due to race condition anyway.
 	 */
 	if (uvmem->async_req_nr > 0 &&
-	    uvmem->async_req[uvmem->async_req_nr - 1] == vmf->pgoff)
+		uvmem->async_req[uvmem->async_req_nr - 1] == vmf->pgoff)
 		uvmem->async_req_nr--;
 
 again:
@@ -246,8 +246,8 @@ again:
 		wake_up_poll(&uvmem->req_wait, POLLIN);
 
 		if (!test_bit(vmf->pgoff, uvmem->cached) &&
-		    test_bit(bit, uvmem->sync_req_bitmap) &&
-		    !uvmem_fatal_signal_pending(current))
+			test_bit(bit, uvmem->sync_req_bitmap) &&
+			!uvmem_fatal_signal_pending(current))
 			schedule();
 
 		finish_wait(&uvmem->page_wait[bit], &wait);
@@ -263,7 +263,7 @@ again:
 			prepare_to_wait(&uvmem->req_list_wait, &wait,
 					TASK_KILLABLE);
 			if (test_bit(vmf->pgoff, uvmem->cached) ||
-			    uvmem_fatal_signal_pending(current)) {
+				uvmem_fatal_signal_pending(current)) {
 				uvmem->req_list_nr--;
 				break;
 			}
@@ -339,7 +339,7 @@ static int uvmem_mmap(struct file *filp, struct vm_area_struct *vma)
 		goto out;
 	}
 	if (((vma->vm_end - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff >
-	    uvmem->pgoff_end) {
+		uvmem->pgoff_end) {
 		error = -EINVAL;
 		goto out;
 	}
@@ -409,7 +409,7 @@ static bool uvmem_copy_page_request(struct uvmem *uvmem,
 	bit = 0;
 	for (;;) {
 		bit = find_next_bit(uvmem->sync_req_bitmap,
-				    uvmem->sync_req_max, bit);
+					uvmem->sync_req_max, bit);
 		if (bit >= uvmem->sync_req_max)
 			break;
 		pgoffs[*req_nr] = uvmem->sync_req[bit];
@@ -423,7 +423,7 @@ static bool uvmem_copy_page_request(struct uvmem *uvmem,
 	if (uvmem->async_req_nr > 0) {
 		int nr = min(req_max - *req_nr, uvmem->async_req_nr);
 		memcpy(pgoffs + *req_nr, uvmem->async_req,
-		       sizeof(*uvmem->async_req) * nr);
+			   sizeof(*uvmem->async_req) * nr);
 		uvmem->async_req_nr -= nr;
 		*req_nr += nr;
 		memmove(uvmem->async_req, uvmem->sync_req + nr,
@@ -561,7 +561,7 @@ static ssize_t uvmem_write(struct file *filp,
 	bit = 0;
 	for (;;) {
 		bit = find_next_bit(uvmem->sync_wait_bitmap,
-				    uvmem->sync_req_max, bit);
+					uvmem->sync_req_max, bit);
 		if (bit >= uvmem->sync_req_max)
 			break;
 		if (test_bit(uvmem->sync_req[bit], uvmem->cached))
@@ -644,8 +644,10 @@ static unsigned long uvmem_bitmap_bytes(unsigned long pgoff_end)
 #ifndef USE_SYSMAP
 static const struct vm_operations_struct my_shmem_vm_ops = {
 	// .fault		= shmem_fault,
-	.fault		= filemap_fault,
-	.map_pages	= filemap_map_pages,
+	// .fault          = (int (*)(struct vm_area_struct *vma, struct vm_fault *vmf))SYSMAP_shmem_fault,
+	.fault		    = filemap_fault,
+	.map_pages	    = filemap_map_pages,
+	// .map_pages      = NULL,
 #ifdef CONFIG_NUMA
 	.set_policy     = NULL,//my_shmem_set_policy,
 	.get_policy     = NULL,//my_shmem_get_policy,
@@ -676,8 +678,7 @@ static int my_shmem_zero_setup(struct vm_area_struct *vma)
 #endif
 
 #ifdef USE_SYSMAP
-typedef int (*sys_shmem_zero_setup)(struct vm_area_struct*);
-static sys_shmem_zero_setup _shmem_zero_setup = (sys_shmem_zero_setup)SYSMAP_shmem_zero_setup;
+static sys_shmem_zero_setup _shmem_zero_setup = (int (*)(struct vm_area_struct*))SYSMAP_shmem_zero_setup;
 #endif
 
 static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
@@ -748,7 +749,7 @@ static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
 	uinit->shmem_fd = shmem_fd;
 
 	async_req = kzalloc(sizeof(*uvmem->async_req) * async_req_max,
-			    GFP_KERNEL);
+				GFP_KERNEL);
 
 	sync_req_max = round_up(sync_req_max, BITS_PER_LONG);
 	sync_bitmap_bytes = sizeof(unsigned long) *
@@ -758,7 +759,7 @@ static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
 	sync_req = kzalloc(sizeof(*uvmem->sync_req) * sync_req_max,
 			   GFP_KERNEL);
 	page_wait = kzalloc(sizeof(*uvmem->page_wait) * sync_req_max,
-			    GFP_KERNEL);
+				GFP_KERNEL);
 	for (i = 0; i < sync_req_max; ++i)
 		init_waitqueue_head(&page_wait[i]);
 
@@ -820,7 +821,7 @@ static int uvmem_init(struct file *filp, struct uvmem_init *uinit)
 }
 
 static long uvmem_ioctl(struct file *filp, unsigned int ioctl,
-		       unsigned long arg)
+			   unsigned long arg)
 {
 	struct uvmem *uvmem = filp->private_data;
 	void __user *argp = (void __user *) arg;
