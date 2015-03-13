@@ -106,6 +106,7 @@ VM_SRCS=\
 	VCPUPool.cpp \
 	RPCToken.cpp \
 	CallCounts.cpp \
+	pyhelper.c \
 
 #	ViewportDelegator.cpp \
 

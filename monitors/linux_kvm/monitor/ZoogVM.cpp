@@ -21,8 +21,7 @@
 // liang: print page hash value
 #include <openssl/sha.h>
 
-// liang: Python support for page-serving process
-#include <python2.6/Python.h>
+#include "pyhelper.h"
 
 #include "ZoogVM.h"
 #include "ZoogVCPU.h"
@@ -1014,7 +1013,7 @@ static int mmapper_page_comp(const void *m1, const void *m2)
 	if (mp1->host_addr < mp2->host_addr) {
 		return mp1->host_addr - mp2->host_addr;
 	} else if (mp1->host_addr > (mp2->host_addr+mp2->size-1)) {
-		return mp1->host_addr > (mp2->host_addr+mp2->size-1);
+		return mp1->host_addr - (mp2->host_addr+mp2->size-1);
 	} else {
 		if (mp2->host_addr <= mp1->host_addr &&
 			mp1->host_addr < mp2->host_addr+mp2->size)
@@ -1026,6 +1025,20 @@ static int mmapper_page_comp(const void *m1, const void *m2)
 			return 0;
 		}
 	}
+}
+
+long find_page_file_offset(uint8_t *vaddr)
+{
+	Mmapper *mp = NULL; 
+	void *segv_addr = (void*)(vaddr + HOST_ADDR_START);
+	fprintf(stderr, "find_page_file_offset(segv_addr=%x)\n", (unsigned int)(segv_addr));
+	Mmapper key; key.host_addr = (uint8_t*)segv_addr;
+	mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
+	if (mp) {
+		long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
+		return fp_offset;
+	}
+	return -1;
 }
 
 void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
@@ -1079,6 +1092,16 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	// PyRun_SimpleString("from time import time,ctime\n"
 	// 	"print 'Today is',ctime(time())\n");
 
+	struct uvmem_server_arg sarg;
+	sarg.fp = fp;
+	sarg.uvmem_fd = uvmem_fd;
+	sarg.shmem_fd = shmem_fd;
+	sarg.size = size;
+	sarg.page_size = page_size;
+
+	py_serve_uvmem_page(&sarg);
+	return;
+
 	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
 	int len, n_pages=0, nr, i;
 
@@ -1116,15 +1139,6 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	close(uvmem_fd);
 	// exit(0);
 }
-
-struct uvmem_server_arg
-{
-	FILE *fp; // file pointer to saved pages
-	int uvmem_fd;
-	int shmem_fd;
-	size_t size; // uvmem mapping sized
-	size_t page_size;
-};
 
 void *serve_uvmem_pages_thread(void *arg)
 {
