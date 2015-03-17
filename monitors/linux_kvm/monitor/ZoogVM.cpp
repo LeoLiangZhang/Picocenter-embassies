@@ -32,6 +32,9 @@
 #include "VCPUPool.h"
 #include "KeyDerivationKey.h"
 
+#define debug_printf(format, ...) fprintf (stderr, format, ## __VA_ARGS__)
+// #define debug_printf(format, ...)
+
 ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
@@ -655,7 +658,7 @@ void ZoogVM::_emit_corefile(FILE *fp)
 	CoreFile c;
 	corefile_init(&c, mf);
 
-	fprintf(stderr, "Core includes %d threads\n", vcpus.count);
+	debug_printf("Core includes %d threads\n", vcpus.count);
 	// Threads
 	LinkedListIterator lli;
 	for (ll_start(&vcpus, &lli);
@@ -675,12 +678,12 @@ void ZoogVM::_emit_corefile(FILE *fp)
 		slot != NULL;
 		slot = (MemSlot*) guest_memory_allocator->next_range(this_range, &this_range))
 	{
-		fprintf(stderr, "liang: [LABEL:%s] get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
+		debug_printf("liang: [LABEL:%s] get_guest_addr=%x, get_host_addr=%x, get_size=%d\n",
 			slot->get_dbg_label(), slot->get_guest_addr(), 
 			(int)slot->get_host_addr(), slot->get_size());
 		corefile_add_segment(&c, slot->get_guest_addr(), slot->get_host_addr(), slot->get_size());
 	}
-	fprintf(stderr, "liang: get_guest_app_code_start=%x, dbg_bootblock_path=%s\n",
+	debug_printf("liang: get_guest_app_code_start=%x, dbg_bootblock_path=%s\n",
 		(int)get_guest_app_code_start(), dbg_bootblock_path);
 	corefile_set_bootblock_info(&c, get_guest_app_code_start(), dbg_bootblock_path);
 
@@ -726,7 +729,7 @@ void ZoogVM::_emit_swapfile()
 		ZoogVCPU *vcpu = (ZoogVCPU *) ll_read(&lli);
 		vcpu->get_swap_thread(&thread);
 		rc = fwrite(&thread, sizeof(thread), 1, fp_swap);
-		fprintf(stderr, "guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
+		debug_printf("guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
 			thread.guest_entry_point, thread.stack_top_guest, thread.gdt_page_guest_addr);
 	}
 
@@ -768,7 +771,7 @@ void sync_ckpt_mmap()
 	int rc;
 	rc = msync((void*)0x28001000, 69763072, MS_SYNC);
 	lite_assert(rc == 0);
-	fprintf(stderr, "Sync to mapped file.\n");
+	debug_printf("Sync to mapped file.\n");
 }
 #endif
 
@@ -853,7 +856,7 @@ void ZoogVM::checkpoint()
 	// const char *corefile = "kvm.core";
 	// const char *swapfile = "kvm.swap";
 
-	fprintf(stderr, "Checkpointing...\n");
+	debug_printf("Checkpointing...\n");
 
 	_pause_all();
 	lock_memory_map();
@@ -869,7 +872,7 @@ void ZoogVM::checkpoint()
 	// fclose(fp);
 
 	// unlock_memory_map();
-	fprintf(stderr, "Checkpointing DONE.\n");
+	debug_printf("Checkpointing DONE.\n");
 	exit(0);
 }
 
@@ -884,7 +887,7 @@ void ZoogVM::resume()
 			while (true)
 			{
 				char buf[50];
-				fprintf(stderr, "Type \"core\" for corefile: ");
+				debug_printf("Type \"core\" for corefile: ");
 				fflush(stderr);
 				char *s = fgets(buf, sizeof(buf), stdin);
 				if (s!=NULL && strcmp(s, "core\n")==0)
@@ -898,7 +901,7 @@ void ZoogVM::resume()
 			emit_corefile(fp);
 			fclose(fp);
 			coredump_request_flag = false;
-			fprintf(stderr, "Dumped core to %s\n", coredump_fn);
+			debug_printf("Dumped core to %s\n", coredump_fn);
 		}
 	}
 }
@@ -940,7 +943,7 @@ void segv_load_all()
 			lite_assert(rc == 1);
 			// lite_assert((int)(mp->fp_offset + mp->size) == ftell(fp));
 			
-			fprintf(stderr, "Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
+			debug_printf("Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
 				mp->virt_addr, (unsigned int)mp->host_addr, mp->size);
 		}
 	}
@@ -964,7 +967,7 @@ void segv_load_addr(void *segv_addr)
 	if(mp->prot == PROT_NONE) {
 		int rc;
 		// if (mprotect(mp->host_addr, mp->size, mmap_prot) <0){
-		// 	fprintf(stderr, "fault: can't mprotect.\n");
+		// 	debug_printf("fault: can't mprotect.\n");
 		// 	exit(1);
 		// }
 		void *mmap_rc = mmap(mp->host_addr, mp->size, mmap_prot, MAP_PRIVATE|MAP_ANONYMOUS|MAP_FIXED, -1, 0);
@@ -979,12 +982,12 @@ void segv_load_addr(void *segv_addr)
 		lite_assert(rc == 1);
 		// lite_assert((int)(mp->fp_offset + mp->size) == ftell(fp));
 		fclose(fp);
-		fprintf(stderr, "Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
+		debug_printf("Load from disk: guest_addr=%x, host_addr=%x, size=%u\n",
 			mp->virt_addr, (unsigned int)mp->host_addr, mp->size);
 	}
 
 	// int mmap_size = 4096;
-	// fprintf(stderr, "fault at %p (%p), set mode to %x\n", segv_addr, pg, mmap_prot);
+	// debug_printf("fault at %p (%p), set mode to %x\n", segv_addr, pg, mmap_prot);
 	// if (mprotect(pg, mmap_size, mmap_prot) <0){
 	// 	perror("fault: can't mprotect.");
 	// 	exit(1);
@@ -995,7 +998,7 @@ void segv_load_addr(void *segv_addr)
 void segv_handler(int signum, siginfo_t *siginfo, void *context)
 {
 	void *pg = (void*)((long)(siginfo->si_addr) & ~4095);
-	fprintf(stderr, "fault at %p (%p)\n", siginfo->si_addr, pg);
+	debug_printf("fault at %p (%p)\n", siginfo->si_addr, pg);
 
 	segv_load_addr(siginfo->si_addr);
 }
@@ -1038,7 +1041,7 @@ long find_page_file_offset(uint8_t *vaddr)
 {
 	Mmapper *mp = NULL; 
 	void *segv_addr = (void*)(vaddr + HOST_ADDR_START);
-	fprintf(stderr, "find_page_file_offset(segv_addr=%x)\n", (unsigned int)(segv_addr));
+	debug_printf("find_page_file_offset(segv_addr=%x)\n", (unsigned int)(segv_addr));
 	Mmapper key; key.host_addr = (uint8_t*)segv_addr;
 	mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
 	if (mp) {
@@ -1074,21 +1077,21 @@ void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
 		long fp_offset = mp->fp_offset + (long)((uint8_t*)segv_addr - mp->host_addr);
 		rc = fseek(fp, fp_offset, SEEK_SET);
 		lite_assert(rc == 0);
-		fprintf(stderr, "load_page_at.fread(host_addr=%x)\n", (unsigned int)((uint8_t*)shmem+pg*page_size));
+		debug_printf("load_page_at.fread(host_addr=%x)\n", (unsigned int)((uint8_t*)shmem+pg*page_size));
 		rc = fread((uint8_t*)shmem+pg*page_size, page_size, 1, fp);
 		lite_assert(rc);
 
 #if PRINT_PAGE_HASH
 		char hash_s[HASH_CHAR_LENGTH];
 		get_hash_str((uint8_t*)shmem+pg*page_size, page_size, hash_s);
-		fprintf(stderr, "page 0x%lx, host 0x%lx, hash %s\n", (unsigned long)pg, (unsigned long)segv_addr, hash_s);
+		debug_printf("page 0x%lx, host 0x%lx, hash %s\n", (unsigned long)pg, (unsigned long)segv_addr, hash_s);
 #else
-		fprintf(stderr, "page 0x%lx, host 0x%lx\n", (unsigned long)pg, (unsigned long)segv_addr);
+		debug_printf("page 0x%lx, host 0x%lx\n", (unsigned long)pg, (unsigned long)segv_addr);
 #endif
 
 	} else {
 		memset((uint8_t*)shmem+pg*page_size, 0, page_size);
-		fprintf(stderr, "page 0x%lx, host 0x%lx, page not found filling zeros\n", (unsigned long)pg, (unsigned long)segv_addr);
+		debug_printf("page 0x%lx, host 0x%lx, page not found filling zeros\n", (unsigned long)pg, (unsigned long)segv_addr);
 	}
 }
 
@@ -1120,18 +1123,18 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	}
 	close(shmem_fd);
 	
-	fprintf(stderr, "Serving pages at %x\n", (uint32_t)shmem);
+	debug_printf("Serving pages at %x\n", (uint32_t)shmem);
 
 	while (n_pages < nr_pages) {
-		fprintf(stderr, "read(uvmem_fd)\n");
+		debug_printf("read(uvmem_fd)\n");
 		len = read(uvmem_fd, buf_pgs, sizeof(buf_pgs));
 		if (len < 0) {
 			err(EXIT_FAILURE, "server: read");
 		}
 		nr = len / sizeof(buf_pgs[0]);
-		fprintf(stderr, "Requesting %d pages.\n", nr);
+		debug_printf("Requesting %d pages.\n", nr);
 		for (i = 0; i < nr; i++) {
-			fprintf(stderr, "Request[%d] ", i);
+			debug_printf("Request[%d] ", i);
 			load_page_at(fp, shmem, buf_pgs[i], page_size);
 		}
 		int written = write(uvmem_fd, buf_pgs, len);
@@ -1140,7 +1143,7 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 		}
 		n_pages += nr;
 	}
-	fprintf(stderr, "Exit uvmem serving loop.\n");
+	debug_printf("Exit uvmem serving loop.\n");
 	munmap(shmem, size);
 	close(shmem_fd);
 	close(uvmem_fd);
@@ -1163,7 +1166,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		exit(EXIT_FAILURE);
 	}
 	long page_size = sysconf(_SC_PAGESIZE);
-	printf("_SC_PAGESIZE = %ld\n", page_size);
+	debug_printf("_SC_PAGESIZE = %ld\n", page_size);
 	int round_size = MemSlot::round_up_to_page(last_guest_range_end);
 	int npages = (round_size - GUEST_ADDR_START) / page_size;
 	// struct uvmem_init uinit = {
@@ -1185,7 +1188,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 	if (ftruncate(shmem_fd, uvmem_size) < 0) {
 		err(EXIT_FAILURE, "truncate(\"shmem_fd\")");
 	}
-	printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
+	debug_printf("uvmem_fd %d shmem_fd %d\n", uvmem_fd, shmem_fd);
 	fflush(stdout);
 
 #if 1
@@ -1206,7 +1209,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		close(zvm->get_vmfd());
 		serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
 	} else {
-		printf("uvmem server process id %d\n", child);
+		debug_printf("uvmem server process id %d\n", child);
 		void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
 		 			uvmem_fd, 0);
 		if (ram == MAP_FAILED) {
@@ -1235,7 +1238,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 	if (rc) 
 		err(EXIT_FAILURE, "pthread_attr_init");
 	rc = pthread_create(&server_thread, &attr, serve_uvmem_pages_thread, &sarg);
-	printf("Thread id %u\n", (unsigned int)server_thread);
+	debug_printf("Thread id %u\n", (unsigned int)server_thread);
 	if (rc)
 		err(EXIT_FAILURE, "pthread_create");
 
@@ -1250,7 +1253,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	// const char *corefile = "kvm.core";
 	// const char *swapfile = "kvm.swap";
 
-	fprintf(stderr, "Resume from core file: %s\n", core_file);
+	debug_printf("Resume from core file: %s\n", core_file);
 
 	// FILE *fp = fopen(corefile, "r");
 	// lite_assert(fp!=NULL);
@@ -1376,7 +1379,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 				lite_assert((int)(foffset + size) == ftell(fp_page));
 			}
 
-			fprintf(stderr, "Memory loaded: get_guest_addr=%x, get_host_addr=%x, get_size=%d\n", 
+			debug_printf("Memory loaded: get_guest_addr=%x, get_host_addr=%x, get_size=%d\n", 
 				mem_slot->get_guest_addr(), (int)mem_slot->get_host_addr(), mem_slot->get_size());
 
 			// liang TODO: improve efficiency 
@@ -1435,7 +1438,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 
 	struct swap_thread_extra *ptr;
 	for(ptr = ptr_thread; ptr < ptr_thread + header.thread_count; ptr++) {
-		fprintf(stderr, "Thread: guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
+		debug_printf("Thread: guest_entry_point=%x, stack_top_guest=%x, gdt_page_guest_addr=%x\n", 
 			ptr->thread.guest_entry_point, ptr->thread.stack_top_guest, ptr->thread.gdt_page_guest_addr);
 		ZoogVCPU *vcpu = new ZoogVCPU(this, ptr);
 		vcpu->get_zid(); 
