@@ -69,6 +69,8 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 
 	idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
 	memset(idt_page->get_host_addr(), 0, idt_page->get_size());
+
+	assigned_ifconfigs = NULL;
 }
 
 ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file)
@@ -406,7 +408,12 @@ void ZoogVM::map_app_code(uint8_t *image, uint32_t size, const char *dbg_bootblo
 void ZoogVM::set_pub_key(ZPubKey *pub_key)
 {
 	this->pub_key = pub_key;
-	coordinator->connect(pub_key);
+	// liang: connect with assigned address if provided.
+	if (assigned_ifconfigs) {
+		coordinator->reconnect(pub_key, assigned_ifconfigs);
+	} else {
+		coordinator->connect(pub_key);
+	}
 	ZKeyPair *kp = coordinator->send_get_monitor_key_pair();
 	crypto.set_monitorKeyPair(kp);
 }

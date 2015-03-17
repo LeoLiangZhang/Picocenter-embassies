@@ -37,6 +37,8 @@
 #include "CallCounts.h"
 
 #include "coreswap.h"
+// liang: add for start with assigned IP address
+#include "pal_abi/pal_net.h"
 
 class MemSlot;
 class ZoogVCPU;
@@ -136,6 +138,10 @@ public:
 		return host_phys_memory + (uint32_t)guest_addr;
 	};
 	
+	// liang: temporary hack
+	// TODO: clean the code, recode the constructor
+	XIPifconfig *assigned_ifconfigs;
+
 
 
 #if DBG_SEND_FAILURE

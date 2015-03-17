@@ -70,11 +70,32 @@ pico_symbols
 
 find common monitors toolchains -path toolchains/linux_elf/apps -prune -o \( -name "*.[chS]" -o -name "*.cc" -o -name "*.cpp" \) -print |xargs grep -ine 'Packet' 2>/dev/null
 
+## Iptables for Tun SNAT
+
+iptables -A POSTROUTING -t nat -o eth0 -s 10.2.0.0/16 -d  0/0 -j MASQUERADE
+iptables -A FORWARD -t filter -o eth0 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -t filter -i eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+Assuming root privilege, eth0 is the Internet interface and Tun is working on 10.2.0.0/16.
 
 # Config related files
 
 coreswap.h - My resume structure
 linux_kvm_protocol.h - KVM related structure, VCPU control struct.
+
+# Extra dependencies
+
+## Python
+
+Install these in schroot with pip, e.g., sudo pip install ...
+
+pyzmq # ZeroMQ python binding
+
+## System
+
+Install in schroot.
+
+python2.6-dev
 
 # basic datastructure
 
@@ -84,7 +105,7 @@ In `/common/utils/`
 - linked_list.c
 
 
-# HTTPD compiliation
+# HTTPD/apache compiliation
 
 (squeeze_i386)liang@neutron:httpd-2.0.65$ LDFLAGS=-pie ./configure --prefix=/home/liang/Works/embassies/toolchains/linux_elf/apache --enable-cache --enable-mem-cache
 
@@ -98,4 +119,3 @@ liang@neutron:criu-1.4$ sudo ./criu check
 prctl: PR_SET_MM_MAP is not supported, which is required for restoring user namespaces
 Error (timerfd.c:56): timerfd: No timerfd support for c/r: Inappropriate ioctl for device
 Error (cr-check.c:308): fdinfo doesn't contain the mnt_id field
-

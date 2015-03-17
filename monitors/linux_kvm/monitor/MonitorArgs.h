@@ -31,4 +31,14 @@ public:
 		// if false, no core; noninteractive exit
 	const char *swap_file;
 	bool is_resume;
+
+	// For IP addresses
+	// const char *in_address;
+	// const char *in_gateway;
+	// const char *in_netmask;
+
+	// const char *in6_address;
+	// const char *in6_gateway;
+	// const char *in6_netmask;
+	const char *assign_in_address;
 };

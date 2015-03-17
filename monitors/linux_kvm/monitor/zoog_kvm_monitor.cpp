@@ -21,6 +21,13 @@
 // liang: checkpoint
 #include <signal.h>
 
+// liang: assign IP address
+#include <arpa/inet.h>
+#include "xax_network_utils.h"
+#include "pal_abi/pal_net.h"
+#include <err.h>
+#include <stdlib.h>
+
 class ElfMapper
 {
 public:
@@ -157,6 +164,42 @@ void checkpoint_signal_handler(int signum)
 	zvm->checkpoint();
 }
 
+void assign_address(ZoogVM *zvm, const char* in_address)
+{
+	// pass in ipv4 address string, e.g., 10.1.0.2
+	uint32_t in_addr;
+	int rc; 
+	rc = inet_pton(AF_INET, in_address, &in_addr);
+	if (rc <= 0) {
+		fprintf(stderr, "inet_pton error(%d): %s.\n", rc, in_address);
+		exit(1);
+	}
+
+	int tunid = ((uint8_t *)&in_addr)[1];
+
+	XIPifconfig *ifconfigs = (XIPifconfig *)malloc(sizeof(XIPifconfig)*2);
+	if (ifconfigs == NULL) {
+		err(EXIT_FAILURE, "Cannot allocate space for assigned_ifconfigs.");
+	}
+	char buf[200];
+	snprintf(buf, sizeof(buf), "10.%d.%d.%d", tunid, ((uint8_t *)&in_addr)[2], ((uint8_t *)&in_addr)[3]);
+	ifconfigs[0].local_interface = decode_ipv4addr_assertsuccess(buf);
+	snprintf(buf, sizeof(buf), "10.%d.0.1", tunid);
+	ifconfigs[0].gateway = decode_ipv4addr_assertsuccess(buf);
+	snprintf(buf, sizeof(buf), "255.255.0.0");
+	ifconfigs[0].netmask = decode_ipv4addr_assertsuccess(buf);
+
+	snprintf(buf, sizeof(buf), "fe80::0a:%x:0:0", tunid);
+	ifconfigs[1].local_interface = decode_ipv6addr_assertsuccess(buf);
+	ifconfigs[1].local_interface.xip_addr_un.xv6_addr.addr[14] = ((uint8_t *)&in_addr)[2];
+	ifconfigs[1].local_interface.xip_addr_un.xv6_addr.addr[15] = ((uint8_t *)&in_addr)[3];
+	snprintf(buf, sizeof(buf), "fe80::0a:%x:0:1", tunid);
+	ifconfigs[1].gateway = decode_ipv6addr_assertsuccess(buf);
+	ifconfigs[1].netmask = decode_ipv6addr_assertsuccess(
+		"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ff00");
+	zvm->assigned_ifconfigs = ifconfigs;
+}
+
 int main(int argc, const char **argv)
 {
 	// liang: setup signal handler for checkpointing
@@ -196,6 +239,9 @@ int main(int argc, const char **argv)
 		zvm->resume();
 	} else {
 		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
+		if (args.assign_in_address) {
+			assign_address(zvm, args.assign_in_address);
+		}
 		zvm->set_swapfile(args.swap_file);
 		load_elf_pal(zvm,
 			(char*) ZOOG_ROOT "/monitors/linux_kvm/pal/build/zoog_kvm_pal");

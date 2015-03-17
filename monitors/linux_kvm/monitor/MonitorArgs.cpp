@@ -17,6 +17,14 @@ MonitorArgs::MonitorArgs(int argc, char **argv)
 	swap_file = "kvm.swap";
 	is_resume = false;
 
+	// in_address = NULL;
+	// in_gateway = NULL;
+	// in_netmask = NULL;
+	// in6_address = NULL;
+	// in6_gateway = NULL;
+	// in6_netmask = NULL;
+	assign_in_address = NULL;
+
 	argc-=1; argv+=1;
 
 	while (argc>0)
@@ -27,6 +35,15 @@ MonitorArgs::MonitorArgs(int argc, char **argv)
 		CONSUME_BOOL("--wait-for-core", wait_for_core);
 		CONSUME_STRING("--swap-file", swap_file);
 		CONSUME_OPTION("--resume", is_resume);
+
+		// CONSUME_STRING("--in-address", in_address);
+		// CONSUME_STRING("--in-gateway", in_gateway);
+		// CONSUME_STRING("--in-netmask", in_netmask);
+		// CONSUME_STRING("--in6-address", in6_address);
+		// CONSUME_STRING("--in6-gateway", in6_gateway);
+		// CONSUME_STRING("--in6-netmask", in6_netmask);
+		CONSUME_STRING("--assign-in-address", assign_in_address);
+
 		char buf[500]; snprintf(buf, sizeof(buf), "Unknown argument: %s", argv[0]);
 		check(false, buf);
 	}
