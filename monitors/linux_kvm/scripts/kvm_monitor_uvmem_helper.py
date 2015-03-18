@@ -1,4 +1,4 @@
-import logging, sys, signal, os
+import logging, sys, signal, os, time
 import struct, mmap, io
 
 # Amazon AWS API
@@ -27,7 +27,11 @@ CACHE_CAPACITY = 40 # LRUCache capacity
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(LOGGER_NAME)
 logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stderr))
+handler = logging.StreamHandler(sys.stderr)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+del handler, formatter
 
 
 # Handle interrupt gracefully
@@ -45,20 +49,35 @@ page_fd, uvmem_fd, shmem_fd, map_size, page_size, pico_id = _tup
 del _tup
 
 
-def measure_webpage_load():
+# Performance measurement
+accumlated_fetching_time = .0
+
+
+def _measure_webpage_load():
     logger.warning('Measure Begin')
-    ret = os.fork()
-    if ret == 0: # cihld
-        import time
+    # ret = os.fork()
+    ret = 0
+    if ret == 0: # child
         t1 = time.time()
         logger.warning('Measure in Child')
         rc = os.system('bash -c "time curl 10.2.0.5:8080"')
+        # import urllib2
+        # response = urllib2.urlopen('http://10.2.0.5:8080/')
+        # html = response.read()
+        # print html
         t2 = time.time()
-        logger.warning('PAGE_MULTIPLIER=%d, block_size=%d KB, CACHE_CAPACITY=%d, cache_size=%d KB, TIME=%f sec', 
+        global accumlated_fetching_time
+        logger.warning('PAGE_MULTIPLIER=%d, block_size=%d KB, CACHE_CAPACITY=%d, cache_size=%d KB,'+
+            ' TIME=%f sec, FETCH_TIME=%f sec', 
             PAGE_MULTIPLIER, PAGE_MULTIPLIER*page_size/1024, CACHE_CAPACITY, 
-            PAGE_MULTIPLIER*page_size*CACHE_CAPACITY/1024, t2-t1)
+            PAGE_MULTIPLIER*page_size*CACHE_CAPACITY/1024, 
+            t2-t1, accumlated_fetching_time)
         logger.warning('Measure DONE')
-# measure_webpage_load()
+
+def measure_webpage_load():
+    import threading
+    t = threading.Thread(target=_measure_webpage_load)
+    t.start()
 
 class LRUCache:
     ''' http://www.kunxi.org/blog/2014/05/lru-cache-in-python/
@@ -113,9 +132,15 @@ class S3PageLoader(object):
             start = block_num * self.block_size
             end = start + self.block_size - 1
             range_str = '{0}-{1}'.format(start, end)
+            t1 = time.time()
             data = self.key_page.get_contents_as_string(headers={'Range' : 'bytes='+range_str})
+            t2 = time.time()
+            ts = t2 - t1
+            global accumlated_fetching_time
+            accumlated_fetching_time += ts
             self.block_cache.set(block_num, data)
-            logger.debug("Fetch S3 block=%d, size=%d", block_num, len(data))
+            logger.debug("Fetch S3 block=%d, size=%d, time=%f s, acc_time=%f s", 
+                block_num, len(data), ts, accumlated_fetching_time)
         return data
 
     def get_page_data(self, page_file_offset):
@@ -168,5 +193,6 @@ def serve_pages(loader):
 
             i += 8
 
-serve_pages(FilePageLoader(page_fd))
-# serve_pages(S3PageLoader())
+measure_webpage_load()
+# serve_pages(FilePageLoader(page_fd))
+serve_pages(S3PageLoader())
