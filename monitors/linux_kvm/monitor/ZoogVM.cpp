@@ -1041,7 +1041,7 @@ long find_page_file_offset(uint8_t *vaddr)
 {
 	Mmapper *mp = NULL; 
 	void *segv_addr = (void*)(vaddr + HOST_ADDR_START);
-	debug_printf("find_page_file_offset(segv_addr=%x)\n", (unsigned int)(segv_addr));
+	// debug_printf("find_page_file_offset(segv_addr=0x%x)\n", (unsigned int)(segv_addr));
 	Mmapper key; key.host_addr = (uint8_t*)segv_addr;
 	mp = (Mmapper*)bsearch(&key, mmapper_list, mmaper_list_count, sizeof(key), mmapper_page_comp);
 	if (mp) {

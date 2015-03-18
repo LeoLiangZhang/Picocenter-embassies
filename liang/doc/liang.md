@@ -90,6 +90,7 @@ linux_kvm_protocol.h - KVM related structure, VCPU control struct.
 Install these in schroot with pip, e.g., sudo pip install ...
 
 pyzmq # ZeroMQ python binding
+ordereddict # use by LRU cache implementation 
 
 ## System
 
