@@ -8,6 +8,11 @@ class MessageType(Enum):
     PICO_RELEASE = 'R'
     PICO_KILL = 'K'
     UPDATE_STATUS = 'S'
+    HELLO = 'H'
+    HEARTBEAT = 'B'
+    REPLY = 'Y'
+    PICO_EXEC = 'E'
+    DEAD = 'D'
 
 class WorkerStatus(Enum):
     AVAILABLE = 1
@@ -38,7 +43,8 @@ class HubConnection(object):
             empty, address, empty, request = job_socket.recv_multipart()
             args = msgpack.unpackb(request)
             result = callback(args)
-            reply = msgpack.packb(result)
+            server = address.split('-')[1].zfill(2)
+            reply = MessageType.REPLY + server + msgpack.packb(result)
             job_socket.send_multipart([b"", address, b"", reply])
         job_socket.close()
 
@@ -51,7 +57,7 @@ class HubConnection(object):
         heart_socket.identity = identity
         heart_socket.connect(endpoint)
 
-        beat = msgpack.packb(1)
+        beat = MessageType.HEARTBEAT
 
         while True:
             heart_socket.send(beat)
@@ -107,7 +113,7 @@ class HubConnection(object):
             'haddr' : self.heart_ip + ':' + self.heart_port,
             'ips' : self.public_ips
         }
-        msg = msgpack.packb(hello)
+        msg = MessageType.HELLO + msgpack.packb(hello)
         socket.send(msg)
         reply = socket.recv()
         return reply == "OK"
