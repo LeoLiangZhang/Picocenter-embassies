@@ -53,10 +53,7 @@ class VCPUPool;
 
 class ZoogVM : public MemoryMapIfc {
 public:
-	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core);
-
-	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core, const char *core_file);
-		// for resuming
+	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs);
 
 	uint32_t map_image(uint8_t *image, uint32_t size, const char *dbg_label);
 		// returns guest address of loaded section

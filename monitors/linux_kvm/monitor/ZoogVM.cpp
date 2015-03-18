@@ -35,14 +35,14 @@
 #define debug_printf(format, ...) fprintf (stderr, format, ## __VA_ARGS__)
 // #define debug_printf(format, ...)
 
-ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core)
+ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
-	this->monitor_args = margs;
 	this->mf = mf;
+	this->monitor_args = margs;
 	this->sf = new SyncFactory_Pthreads();
 	this->mmapOverride = mmapOverride;
-	this->wait_for_core = wait_for_core;
+	this->wait_for_core = margs->wait_for_core;
 	this->mutex = sf->new_mutex(false);
 	this->memory_map_mutex = sf->new_mutex(false);
 	guest_memory_allocator = new CoalescingAllocator(sf, true);
@@ -58,78 +58,56 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs
 	dbg_send_log_fp = fopen("monitor_send_log", "w");
 #endif // DBG_SEND_FAILURE
 
-	_setup(false);
+	if (!margs->is_resume) { // Normal start
+		_setup(false);
 
-	// Need guest memory allocator available to allocate alarms page
-	host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
-		// we keep a handle to this page to keep client from deallocating
-		// it, and causing us to later deref invalid memory.
-		// TODO I guess we should do the same for the call page, huh?
-	host_alarms = new HostAlarms(zutex_table, host_alarms_page);
-	alarm_thread = new AlarmThread(host_alarms);
+		// Need guest memory allocator available to allocate alarms page
+		host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
+			// we keep a handle to this page to keep client from deallocating
+			// it, and causing us to later deref invalid memory.
+			// TODO I guess we should do the same for the call page, huh?
+		host_alarms = new HostAlarms(zutex_table, host_alarms_page);
+		alarm_thread = new AlarmThread(host_alarms);
 
-	TunIDAllocator* tunid = new TunIDAllocator();
-	coordinator = new CoordinatorConnection(mf, sf, tunid, host_alarms);
+		TunIDAllocator* tunid = new TunIDAllocator();
+		coordinator = new CoordinatorConnection(mf, sf, tunid, host_alarms);
 
-	idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
-	memset(idt_page->get_host_addr(), 0, idt_page->get_size());
+		idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
+		memset(idt_page->get_host_addr(), 0, idt_page->get_size());
 
-	assigned_ifconfigs = NULL;
-}
+		assigned_ifconfigs = NULL;
+	} else { 
+		// liang: swapon
+		// resume from checkpoint
+		_setup(true);
 
-ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core, const char *core_file)
-	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
-{
-	// liang: swapon
-	// resume from checkpoint
-	this->monitor_args = margs;
-	this->mf = mf;
-	this->sf = new SyncFactory_Pthreads();
-	this->mmapOverride = mmapOverride;
-	this->wait_for_core = wait_for_core;
-	this->mutex = sf->new_mutex(false);
-	this->memory_map_mutex = sf->new_mutex(false);
-	guest_memory_allocator = new CoalescingAllocator(sf, true);
-	net_buffer_table = new NetBufferTable(this, sf);
-	zutex_table = new ZutexTable(mf, sf, this);
+		struct swap_vm *vm;
+		_load_swap(margs->swap_file, &vm);
 
-	linked_list_init(&vcpus, mf);
-	vcpu_pool = new VCPUPool(this);
-	pub_key = NULL;
-	guest_app_code_start = NULL;
+		// Need guest memory allocator available to allocate alarms page
+		// liang: resume would do 
+		// host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
+			// we keep a handle to this page to keep client from deallocating
+			// it, and causing us to later deref invalid memory.
+			// TODO I guess we should do the same for the call page, huh?
+		host_alarms = new HostAlarms(zutex_table, host_alarms_page);
+		alarm_thread = new AlarmThread(host_alarms);
 
-#if DBG_SEND_FAILURE
-	dbg_send_log_fp = fopen("monitor_send_log", "w");
-#endif // DBG_SEND_FAILURE
+		TunIDAllocator* tunid = new TunIDAllocator();
+		coordinator = new CoordinatorConnection(mf, sf, tunid, host_alarms);
 
-	_setup(true);
+		// liang: _load_swap would do
+		// idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
+		// memset(idt_page->get_host_addr(), 0, idt_page->get_size());
 
-	struct swap_vm *vm;
-	_load_swap(core_file, &vm);
+		// liang: reconnect coordinator
+		if(this->pub_key){
+			// set_pub_key(this->pub_key);
+			_resume_coordinator(this->pub_key, vm->ifconfigs);
+		}
 
-	// Need guest memory allocator available to allocate alarms page
-	// liang: resume would do 
-	// host_alarms_page = allocate_guest_memory(PAGE_SIZE, "host_alarms_page");
-		// we keep a handle to this page to keep client from deallocating
-		// it, and causing us to later deref invalid memory.
-		// TODO I guess we should do the same for the call page, huh?
-	host_alarms = new HostAlarms(zutex_table, host_alarms_page);
-	alarm_thread = new AlarmThread(host_alarms);
-
-	TunIDAllocator* tunid = new TunIDAllocator();
-	coordinator = new CoordinatorConnection(mf, sf, tunid, host_alarms);
-
-	// liang: _load_swap would do
-	// idt_page = allocate_guest_memory(PAGE_SIZE, "idt_page");
-	// memset(idt_page->get_host_addr(), 0, idt_page->get_size());
-
-	// liang: reconnect coordinator
-	if(this->pub_key){
-		// set_pub_key(this->pub_key);
-		_resume_coordinator(this->pub_key, vm->ifconfigs);
+		delete vm; // make sure recycle it, bad design, TODO: refactory here.
 	}
-
-	delete vm; // make sure recycle it
 }
 
 struct idt_table_entry {
