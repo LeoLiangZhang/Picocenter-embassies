@@ -26,7 +26,7 @@ CACHE_CAPACITY = 40 # LRUCache capacity
 # Set the root logger level to debug will print boto's logging.
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(LOGGER_NAME)
-# logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler(sys.stderr))
 
 
@@ -41,7 +41,7 @@ signal.signal(signal.SIGINT, signal_handler_sigint)
 logger.debug('hello python')
 _tup = emb.get_sarg()
 logger.debug('sarg: %s', _tup)
-page_fd, uvmem_fd, shmem_fd, map_size, page_size = _tup
+page_fd, uvmem_fd, shmem_fd, map_size, page_size, pico_id = _tup
 del _tup
 
 

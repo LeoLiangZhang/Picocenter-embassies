@@ -7,6 +7,7 @@ struct uvmem_server_arg
 	int shmem_fd;
 	size_t size; // uvmem mapping sized
 	size_t page_size;
+	int pico_id;
 };
 
 #ifdef __cplusplus

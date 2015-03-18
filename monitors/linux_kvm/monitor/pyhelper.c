@@ -13,10 +13,11 @@ static PyObject* emb_get_sarg(PyObject *self, PyObject *args)
         return NULL;
     int page_fd = fileno(serve_uvmem_page_sarg.fp),
         uvmem_fd = serve_uvmem_page_sarg.uvmem_fd,
-        shmem_fd = serve_uvmem_page_sarg.shmem_fd;
+        shmem_fd = serve_uvmem_page_sarg.shmem_fd,
+        pico_id = serve_uvmem_page_sarg.pico_id;
     unsigned long map_size = serve_uvmem_page_sarg.size,
         page_size = serve_uvmem_page_sarg.page_size;
-    return Py_BuildValue("iiikk", page_fd, uvmem_fd, shmem_fd, map_size, page_size);
+    return Py_BuildValue("iiikki", page_fd, uvmem_fd, shmem_fd, map_size, page_size, pico_id);
 }
 
 static PyObject* emb_find_page_file_offset(PyObject *self, PyObject *args)

@@ -139,6 +139,7 @@ public:
 	// liang: temporary hack
 	// TODO: clean the code, recode the constructor
 	XIPifconfig *assigned_ifconfigs;
+	MonitorArgs *monitor_args;
 
 
 
@@ -193,7 +194,6 @@ private:
 
 	char *swapfile;
 	char *pagefile;
-	MonitorArgs *monitor_args;
 
 	// private functions
 

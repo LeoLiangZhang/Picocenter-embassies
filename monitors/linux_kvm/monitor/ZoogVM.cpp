@@ -1075,23 +1075,11 @@ void load_page_at(FILE *fp, void *shmem, uint64_t pg, size_t page_size)
 	}
 }
 
+#define USE_PYPAGE_LOADER 1
+
+#ifndef USE_PYPAGE_LOADER
 void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t page_size)
 {
-	// Py_SetProgramName((char*)"zoog_kvm_monitor");  /* optional but recommended */
-	// Py_Initialize();
-	// PyRun_SimpleString("from time import time,ctime\n"
-	// 	"print 'Today is',ctime(time())\n");
-
-	struct uvmem_server_arg sarg;
-	sarg.fp = fp;
-	sarg.uvmem_fd = uvmem_fd;
-	sarg.shmem_fd = shmem_fd;
-	sarg.size = size;
-	sarg.page_size = page_size;
-
-	py_serve_uvmem_page(&sarg);
-	return;
-
 	uint64_t buf_pgs[UVMEM_PAGE_BUF_SIZE];
 	int len, n_pages=0, nr, i;
 
@@ -1129,11 +1117,16 @@ void serve_uvmem_pages(FILE *fp, int uvmem_fd, int shmem_fd, size_t size, size_t
 	close(uvmem_fd);
 	// exit(0);
 }
+#endif
 
 void *serve_uvmem_pages_thread(void *arg)
 {
 	struct uvmem_server_arg *sarg = (struct uvmem_server_arg*)arg;
+#if USE_PYPAGE_LOADER
+	py_serve_uvmem_page(sarg);
+#else
 	serve_uvmem_pages(sarg->fp, sarg->uvmem_fd, sarg->shmem_fd, sarg->size, sarg->page_size);
+#endif
 	return NULL;
 }
 
@@ -1187,7 +1180,16 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		}
 		close(zvm->get_kvmfd());
 		close(zvm->get_vmfd());
-		serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
+
+		struct uvmem_server_arg sarg;
+		sarg.fp = fp;
+		sarg.uvmem_fd = uvmem_fd;
+		sarg.shmem_fd = shmem_fd;
+		sarg.size = uvmem_size;
+		sarg.page_size = page_size;
+		sarg.pico_id = zvm->monitor_args->pico_id;
+		serve_uvmem_pages_thread(&sarg);
+		// serve_uvmem_pages(fp, uvmem_fd, shmem_fd, uvmem_size, page_size);
 	} else {
 		debug_printf("uvmem server process id %d\n", child);
 		void *ram = mmap((void*)(HOST_ADDR_START+GUEST_ADDR_START), uvmem_size, PROT_READ | PROT_WRITE, MAP_PRIVATE|MAP_FIXED,
