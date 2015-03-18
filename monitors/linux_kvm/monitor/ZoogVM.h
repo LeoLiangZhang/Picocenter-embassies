@@ -39,6 +39,7 @@
 #include "coreswap.h"
 // liang: add for start with assigned IP address
 #include "pal_abi/pal_net.h"
+#include "MonitorArgs.h"
 
 class MemSlot;
 class ZoogVCPU;
@@ -52,9 +53,9 @@ class VCPUPool;
 
 class ZoogVM : public MemoryMapIfc {
 public:
-	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core);
+	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core);
 
-	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file);
+	ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core, const char *core_file);
 		// for resuming
 
 	uint32_t map_image(uint8_t *image, uint32_t size, const char *dbg_label);
@@ -195,6 +196,7 @@ private:
 
 	char *swapfile;
 	char *pagefile;
+	MonitorArgs *monitor_args;
 
 	// private functions
 

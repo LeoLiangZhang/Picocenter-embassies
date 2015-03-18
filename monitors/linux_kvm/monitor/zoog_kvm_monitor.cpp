@@ -235,10 +235,10 @@ int main(int argc, const char **argv)
 	// liang: resume process
 	if (args.is_resume)
 	{
-		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core, args.swap_file);
+		zvm = new ZoogVM(mf, &mmapOverride, &args, args.wait_for_core, args.swap_file);
 		zvm->resume();
 	} else {
-		zvm = new ZoogVM(mf, &mmapOverride, args.wait_for_core);
+		zvm = new ZoogVM(mf, &mmapOverride, &args, args.wait_for_core);
 		if (args.assign_in_address) {
 			assign_address(zvm, args.assign_in_address);
 		}

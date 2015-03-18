@@ -35,6 +35,7 @@ MonitorArgs::MonitorArgs(int argc, char **argv)
 		CONSUME_BOOL("--wait-for-core", wait_for_core);
 		CONSUME_STRING("--swap-file", swap_file);
 		CONSUME_OPTION("--resume", is_resume);
+		CONSUME_INT("--pico-id", pico_id);
 
 		// CONSUME_STRING("--in-address", in_address);
 		// CONSUME_STRING("--in-gateway", in_gateway);

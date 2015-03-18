@@ -35,9 +35,10 @@
 #define debug_printf(format, ...) fprintf (stderr, format, ## __VA_ARGS__)
 // #define debug_printf(format, ...)
 
-ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core)
+ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
+	this->monitor_args = margs;
 	this->mf = mf;
 	this->sf = new SyncFactory_Pthreads();
 	this->mmapOverride = mmapOverride;
@@ -76,11 +77,12 @@ ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core
 	assigned_ifconfigs = NULL;
 }
 
-ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, bool wait_for_core, const char *core_file)
+ZoogVM::ZoogVM(MallocFactory *mf, MmapOverride *mmapOverride, MonitorArgs *margs, bool wait_for_core, const char *core_file)
 	: crypto(MonitorCrypto::NO_MONITOR_KEY_PAIR)
 {
 	// liang: swapon
 	// resume from checkpoint
+	this->monitor_args = margs;
 	this->mf = mf;
 	this->sf = new SyncFactory_Pthreads();
 	this->mmapOverride = mmapOverride;

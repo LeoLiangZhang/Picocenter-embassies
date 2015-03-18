@@ -268,6 +268,7 @@ void tcp_client()
 
   n = 0, recvline[0] = 0;
   strcpy(srv_ip, "10.2.0.1");
+  // strcpy(srv_ip, "192.168.1.75");
   // strcpy(sendline, "Hello world! Count %d\n"); 
   sockfd=socket(AF_INET,SOCK_STREAM,0);
   if(sockfd < 0){

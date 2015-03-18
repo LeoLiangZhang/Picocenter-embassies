@@ -96,7 +96,7 @@ ordereddict # use by LRU cache implementation
 
 Install in schroot.
 
-python2.6-dev
+python2.6-dev iptables
 
 # basic datastructure
 

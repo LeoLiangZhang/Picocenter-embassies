@@ -41,4 +41,5 @@ public:
 	// const char *in6_gateway;
 	// const char *in6_netmask;
 	const char *assign_in_address;
+	int pico_id;
 };
