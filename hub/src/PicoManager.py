@@ -61,15 +61,18 @@ class PicoManager(object):
         return pico_id
 
     def find_available_worker(self, ports):
-
-        query = ("SELECT ")
+	port_conditions = "pp.port=%s" % ports[0]
+	for port in ports[1:]:
+		port_conditions += (" OR pp.port=%s" % port)
+	query = "SELECT ip, heart_ip FROM ips i, workers w WHERE i.worker_id=w.worker_id AND status=1 AND (ip NOT IN (SELECT public_ip FROM picos p, picoports pp WHERE p.pico_id=pp.pico_id AND ({0})))".format(port_conditions)
 
         cursor = self.db.cursor()
         cursor.execute(query)
 
-        cursor.fetchone()
+        host_ip, worker_ip = cursor.fetchone()
+	worker_identity = worker_ip + '\jobs'
 
-        return worker, port_map
+        return host_ip, worker_identity
 
     def run_picoprocess(self, pico):
         """
