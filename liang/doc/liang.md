@@ -38,6 +38,10 @@ schroot -- bash -c "export DISPLAY=$DISPLAY ; cd /elasticity/embassies/ && ZOOG_
 
 schroot -- bash -c "cd /elasticity/embassies/ && ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false"
 
+**Recently updated options for the monitor**
+
+ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file nginx2.kvm.swap --assign-in-address 10.2.0.2 --resume --pico-id 42
+
 
 ## Checkpointing
 
