@@ -11,7 +11,7 @@ static PyObject* emb_get_sarg(PyObject *self, PyObject *args)
 {
     if(!PyArg_ParseTuple(args, ":get_sarg"))
         return NULL;
-    int page_fd = fileno(serve_uvmem_page_sarg.fp),
+    int page_fd = serve_uvmem_page_sarg.fp ? fileno(serve_uvmem_page_sarg.fp) : -1,
         uvmem_fd = serve_uvmem_page_sarg.uvmem_fd,
         shmem_fd = serve_uvmem_page_sarg.shmem_fd,
         pico_id = serve_uvmem_page_sarg.pico_id;

@@ -93,14 +93,21 @@ linux_kvm_protocol.h - KVM related structure, VCPU control struct.
 
 Install these in schroot with pip, e.g., sudo pip install ...
 
-pyzmq # ZeroMQ python binding
-ordereddict # use by LRU cache implementation 
+* pyzmq - ZeroMQ python binding
+* ordereddict - use by LRU cache implementation 
+* boto - python API to AWS
+
+sudo pip install ordereddict boto 
 
 ## System
 
 Install in schroot.
 
-python2.6-dev iptables
+schroot -- sudo apt-get install python2.6-dev iptables curl python-pip
+
+## Ravello deployment
+
+sudo apt-get install build-essential
 
 # basic datastructure
 

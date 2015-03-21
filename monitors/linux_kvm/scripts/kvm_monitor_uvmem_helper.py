@@ -1,5 +1,6 @@
-import logging, sys, signal, os, time
+import sys, signal, os, time
 import struct, mmap, io
+import logging, datetime
 
 # Amazon AWS API
 import boto
@@ -18,17 +19,32 @@ except:
     OrderedDict = ordereddict.OrderedDict
 
 
-LOGGER_NAME = 'uvmem_page_server'
+
 S3_BUCKET_NAME = 'elasticity-storage'
 PAGE_MULTIPLIER = 32 # block_size = page_size * multiplier
 CACHE_CAPACITY = 40 # LRUCache capacity
+
+LOGGER_NAME = 'uvmem_page_server'
+LOGGER_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+LOGGER_DATEFMT= '%Y-%m-%d %H:%M:%S.%f'
+
+class MicrosecondFormatter(logging.Formatter):
+    converter=datetime.datetime.fromtimestamp
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+        if datefmt:
+            s = ct.strftime(datefmt)
+        else:
+            t = ct.strftime("%Y-%m-%d %H:%M:%S")
+            s = "%s,%06d(%f)" % (t, ct.microsecond, record.created)
+        return s
 
 # Set the root logger level to debug will print boto's logging.
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(LOGGER_NAME)
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stderr)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = MicrosecondFormatter(LOGGER_FORMAT, datefmt=LOGGER_DATEFMT)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 del handler, formatter
@@ -193,6 +209,6 @@ def serve_pages(loader):
 
             i += 8
 
-measure_webpage_load()
-# serve_pages(FilePageLoader(page_fd))
-serve_pages(S3PageLoader())
+# measure_webpage_load()
+serve_pages(FilePageLoader(page_fd))
+# serve_pages(S3PageLoader())

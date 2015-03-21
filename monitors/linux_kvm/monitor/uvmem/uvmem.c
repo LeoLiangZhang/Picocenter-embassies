@@ -678,7 +678,8 @@ static int my_shmem_zero_setup(struct vm_area_struct *vma)
 #endif
 
 #ifdef USE_SYSMAP
-static sys_shmem_zero_setup _shmem_zero_setup = (int (*)(struct vm_area_struct*))SYSMAP_shmem_zero_setup;
+typedef int (*sys_shmem_zero_setup)(struct vm_area_struct*);
+static sys_shmem_zero_setup _shmem_zero_setup = (sys_shmem_zero_setup)SYSMAP_shmem_zero_setup;
 #endif
 
 static int uvmem_init(struct file *filp, struct uvmem_init *uinit)

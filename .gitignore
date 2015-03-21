@@ -13,3 +13,7 @@ external-code/
 #.gitignore
 zftp_index_origin*
 toolchains/linux_elf/apps/
+var/
+*.core
+*.swap
+*.swap.page

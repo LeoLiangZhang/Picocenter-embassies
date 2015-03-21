@@ -4,19 +4,30 @@ KVM picoprocesses.
 
 import sys, os
 import time, subprocess, signal
-import logging
+import logging, datetime
 
 EMBASSIES_ROOT = '/elasticity/embassies'
 LOGGER_NAME = 'picocenter_worker'
 LOGGER_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
+LOGGER_DATEFMT= '%Y-%m-%d %H:%M:%S.%f'
 
+class MicrosecondFormatter(logging.Formatter):
+    converter=datetime.datetime.fromtimestamp
+    def formatTime(self, record, datefmt=None):
+        ct = self.converter(record.created)
+        if datefmt:
+            s = ct.strftime(datefmt)
+        else:
+            t = ct.strftime("%Y-%m-%d %H:%M:%S")
+            s = "%s,%06d(%f)" % (t, ct.microsecond, record.created)
+        return s
 
 # Set the root logger level to debug will print boto's logging.
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(LOGGER_NAME)
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stdout)
-formatter = logging.Formatter(LOGGER_FORMAT)
+formatter = MicrosecondFormatter(LOGGER_FORMAT, datefmt=LOGGER_DATEFMT)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 del handler, formatter
@@ -73,6 +84,7 @@ class WorkerConfig(ConfigBase):
                                'monitor/build/zoog_kvm_monitor')
     monitor_image = os.path.join(EMBASSIES_ROOT, 'toolchains/linux_elf',
                                  'elf_loader/build/elf_loader.nginx.signed')
+    monitor_swap_file = 'kvm.swap'
 
 
 class ProcessBase(object):
@@ -94,7 +106,7 @@ class ProcessBase(object):
         else:
             self._args.append(str(obj))
 
-    def execute(self, args, stdin=None, stdout=None, stderr=None,
+    def _execute(self, args, stdin=None, stdout=None, stderr=None,
                 close_fds=False, cwd=None, env=None):
         self._popen = subprocess.Popen(args, stdin=stdin, stdout=stdout,
                                        stderr=stderr, close_fds=close_fds,
@@ -104,8 +116,8 @@ class ProcessBase(object):
     def run(self):
         ensure_dir_exit(self._cwd)
         f_stdin, f_stdout, f_stderr = open_input_output(self._cwd)
-        logger.debug(self._args)
-        self.execute(self._args, 
+        logger.debug('exec(%s)', self._args)
+        self._execute(self._args, 
                      stdin=f_stdin, stdout=f_stdout, stderr=f_stderr,
                      close_fds=True, cwd=self._cwd, env=self._env)
         f_stdin.close()
@@ -137,6 +149,10 @@ class ProcessBase(object):
                 self._popen.kill();
         except:
             pass
+
+    def send_signal(self, signal):
+        if self._popen:
+            self._popen.send_signal(signal)
 
     @classmethod
     def _setup_sigchld_handler(cls):
@@ -207,24 +223,132 @@ class Coordinator(ProcessBase):
 
 
 class Monitor(ProcessBase):
-    def __init__(self, config, pico_id, internal_ip, resume):
+    def __init__(self, config, pico_id, internal_ip=None, resume=False):
         super(Monitor, self).__init__()
+        self.append_args(config.monitor_bin)
         options = {
             '--wait-for-core': 'false',
             '--image-file': config.monitor_image,
             '--pico-id': str(pico_id),
-            '--assign-in-address': internal_ip,
         }
+        self.append_args(options)
+        if internal_ip:
+            self.append_args({'--assign-in-address': internal_ip})
+        if resume:
+            self.append_args('--resume')
         env = {
             'ZOOG_TUNID': config.tunid
         }
-        self.append_args(config.monitor_bin)
-        self.append_args(options)
-        if resume:
-            self.append_args('--resume')
         self._env = env
         self._cwd = os.path.join(config.pico_dir, str(pico_id))
 
+    def checkpoint(self):
+        self.send_signal(signal.SIGUSR2)
+
+
+class Pico:
+
+    INIT = 0
+    RUN = 1
+    CHECKPOINT = 2
+    STOPPED = 3
+
+    def __init__(self, config, pico_id, internal_ip=None, resume=False):
+        self.config = config
+        self.pico_id = pico_id
+        self.internal_ip = internal_ip
+        self.resume = resume
+        self.monitor = None
+        self.status = Pico.INIT
+
+    def execute(self):
+        if self.monitor:
+            return
+        self.monitor = Monitor(self.config, self.pico_id, self.internal_ip,
+                               self.resume)
+        self.monitor.run()
+        self.status = Pico.RUN
+
+    def checkpoint(self):
+        if self.monitor and self.status != Pico.STOPPED:
+            self.status = Pico.CHECKPOINT
+            self.monitor.checkpoint()
+
+    def kill(self):
+        if self.monitor and self.status != Pico.STOPPED:
+            self.monitor.kill()
+
+    @property
+    def pid(self):
+        return self.monitor.pid if self.monitor else -1
+
+
+class PicoManager:
+    def __init__(self, config):
+        self.config = config
+        self._picos = {} # pico_id -> pico
+        self._running_picos = {} # pid -> pico
+        self._waiting_picos = [] # List<pico>, waiting to restart
+        ProcessBase.add_process_stop_listener(self._process_stop_listener)
+
+    def _process_stop_listener(self, p):
+        pid = p.pid
+        pico = self._running_picos.get(pid, None)
+        if pico is None:
+            return
+        pico.status = Pico.STOPPED
+        del self._running_picos[pid]
+        for pico in self._waiting_picos:
+            self._resume(pico)
+
+    def _add_running_pico(self, pico):
+        assert pico.pid > 0
+        assert pico.pid not in self._running_picos
+        self._running_picos[pico.pid] = pico
+        if pico.pico_id not in self._picos:
+            self._picos[pico.pico_id] = pico
+
+    def get_pico_by_id(self, pico_id):
+        return self._picos.get(pico_id, None)
+
+    def _execute(self, pico):
+        pico.execute()
+        logger.info('pico.execute(pico_id=%d, internal_ip=%s, resume=%s)'+
+                    ' => pid=%s', pico.pico_id, pico.internal_ip, pico.resume,
+                    pico.pid)
+        self._add_running_pico(pico)
+
+    def _resume(self, pico):
+        pico.resume = True
+        self._execute(pico)
+
+    def execute(self, pico_id, internal_ip, resume):
+        pico = Pico(self.config, pico_id, internal_ip, resume)
+        self._execute(pico)
+
+    def checkpoint(self, pico_id):
+        pico = self.get_pico_by_id(pico_id)
+        if pico is None:
+            return
+        pico.checkpoint()
+
+    def kill(self, pico_id):
+        pico = self.get_pico_by_id(pico_id)
+        if pico is None:
+            return
+        pico.kill()
+
+    def ensure_alive(self, pico_id):
+        # TODO: This funciton needs more testing, especially CHECKPOINT case
+        pico = self.get_pico_by_id(pico_id)
+        if pico is None:
+            return # pico not exist, ignore
+        if pico.status == Pico.RUN:
+            return
+        elif pico.status == Pico.STOPPED:
+            self._resume(pico)
+        elif pico.status == Pico.CHECKPOINT:
+            self._waiting_picos.append(pico)
 
 
 class Worker:
@@ -235,6 +359,7 @@ class Worker:
         self.zftp = None
         self.has_started = False
         self.is_stopping = False
+        self.picos = PicoManager(config)
 
     def _check_coordinator_ready(self):
         tunid = self.config.tunid
@@ -253,10 +378,13 @@ class Worker:
             exit()
 
     def pico_exec(self, pico_id, internal_ip, resume):
-        monitor = Monitor(self.config, pico_id, internal_ip, resume)
-        monitor.run()
-        logger.info('monitor.pid = %d', monitor.pid)
-        return monitor
+        self.picos.execute(pico_id, internal_ip, resume)
+        
+    def pico_kill(self, pico_id):
+        self.picos.kill(pico_id)
+
+    def pico_ensure_alive(self, pico_id):
+        self.picos.ensure_alive(pico_id)
 
     def start(self):
         if self.has_started:
@@ -303,7 +431,13 @@ def main():
     worker = Worker(config)
     worker.start()
 
+    def sigint_handler(sig, frame):
+        logger.critical('Receive SIGINT. Stopping...')
+        worker.stop()
+    signal.signal(signal.SIGINT, sigint_handler)
+
     import code
+    picos = worker.picos
     code.interact(local=locals())
 
 if __name__ == '__main__':
