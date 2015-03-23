@@ -17,6 +17,7 @@
 #include <signal.h>
 #include <err.h>
 #include "uvmem/uvmem.h"
+#include <sys/prctl.h>
 
 // liang: print page hash value
 #include <openssl/sha.h>
@@ -714,7 +715,14 @@ void ZoogVM::_emit_swapfile()
 	}
 
 	// Memory
-	FILE *fp_page = fopen(pagefile, "w+");
+	int len = strlen(pagefile);
+	const char *tmp_suffix = ".tmp";
+	int len2 = strlen(tmp_suffix);
+	char pagefile_tmp[256];
+	memcpy(pagefile_tmp, pagefile, len);
+	memcpy(pagefile_tmp+len, tmp_suffix, len2+1);
+
+	FILE *fp_page = fopen(pagefile_tmp, "w+");
 	lite_assert(fp_page != NULL);
 
 	uint32_t seg_count = 0;
@@ -741,6 +749,8 @@ void ZoogVM::_emit_swapfile()
 
 	fclose(fp_page);
 	fclose(fp_swap);
+
+	rename(pagefile_tmp, pagefile);
 }
 
 #if 0
@@ -1180,6 +1190,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		}
 		close(zvm->get_kvmfd());
 		close(zvm->get_vmfd());
+		prctl(PR_SET_PDEATHSIG, SIGKILL); // kill child when parent exits
 
 		struct uvmem_server_arg sarg;
 		sarg.fp = fp;

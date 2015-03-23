@@ -17,3 +17,19 @@ var/
 *.core
 *.swap
 *.swap.page
+
+# uvmem ignore
+# TODO: improve uvmem makefile, create a bulid folder for these
+monitors/linux_kvm/monitor/uvmem/.built-in.o.cmd
+monitors/linux_kvm/monitor/uvmem/.gitignore
+monitors/linux_kvm/monitor/uvmem/.tmp_versions/
+monitors/linux_kvm/monitor/uvmem/.uvmem.ko.cmd
+monitors/linux_kvm/monitor/uvmem/.uvmem.mod.o.cmd
+monitors/linux_kvm/monitor/uvmem/.uvmem.o.cmd
+monitors/linux_kvm/monitor/uvmem/Module.symvers
+monitors/linux_kvm/monitor/uvmem/modules.order
+monitors/linux_kvm/monitor/uvmem/uvmem.ko
+monitors/linux_kvm/monitor/uvmem/uvmem.ko.bak
+monitors/linux_kvm/monitor/uvmem/uvmem.mod.c
+monitors/linux_kvm/monitor/uvmem/uvmem_sysmap.h
+monitors/linux_kvm/monitor/uvmem/uvmem_test

@@ -19,8 +19,8 @@ except:
     OrderedDict = ordereddict.OrderedDict
 
 
-
 S3_BUCKET_NAME = 'elasticity-storage'
+PICO_SWAP_FILE_FMT = '/pico/{pico_id}/kvm.swap.page'
 PAGE_MULTIPLIER = 32 # block_size = page_size * multiplier
 CACHE_CAPACITY = 40 # LRUCache capacity
 
@@ -133,7 +133,8 @@ class S3PageLoader(object):
     def __init__(self):
         conn = boto.connect_s3()
         bucket_ckpt = conn.get_bucket(S3_BUCKET_NAME)
-        key_page = Key(bucket_ckpt, 'nginx2.kvm.swap.page')
+        filename = PICO_SWAP_FILE_FMT.format(pico_id=pico_id)
+        key_page = Key(bucket_ckpt, filename)
         logger.debug('Init elasticity-checkpoint bucket.')
         self.conn = conn
         self.bucket_ckpt = bucket_ckpt

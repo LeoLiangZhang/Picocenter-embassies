@@ -30,6 +30,9 @@
 #include "math_util.h"
 #include "KvmNetBufferContainer.h"
 
+//liang: use for avx detection
+#include <stdlib.h>
+
 /*
  * NB: Some methods in this file follow a safety-check design pattern
  * of copying the fixed part of the xa_* data structure from guest
@@ -194,6 +197,15 @@ void ZoogVCPU::sig_int_absorber(int signum)
 
 int core_signal = SIGUSR1;
 
+int has_avx = -1;
+int get_avx_support()
+{
+	if (has_avx == -1) {
+		has_avx = system("grep -e avx /proc/cpuinfo > /dev/null") == 0;
+	}
+	return has_avx;
+}
+
 void ZoogVCPU::run()
 {
 	int rc;
@@ -269,7 +281,10 @@ void ZoogVCPU::run()
 	sregs.cr4 = 0;
 	sregs.cr4 |= (1<<9); // Set the OSFXSR bit		(MMX/SSE support)
 	sregs.cr4 |= (1<<10); // Set the OSXMMEXCPT bit (MMX/SSE support)
-	sregs.cr4 |= (1<<18); // Enable use of XSETBV/XGETBC (AVX support)
+
+	// liang: fix avx detection
+	if (get_avx_support())
+		sregs.cr4 |= (1<<18); // Enable use of XSETBV/XGETBC (AVX support)
 
 	my_thread_id = syscall(__NR_gettid); //gettid();
 

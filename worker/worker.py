@@ -213,59 +213,6 @@ class ProcessBase(object):
 # Init SIGCHLD signal handler, and process_stop_listener service
 ProcessBase._setup_sigchld_handler()
 
-class Zftp(ProcessBase):
-    def __init__(self, config):
-        super(Zftp, self).__init__()
-        options = {
-            '--origin-filesystem': 'true',
-            '--origin-reference': 'true',
-            '--listen-zftp': 'tunid',
-            '--listen-lookup': 'tunid',
-            '--index-dir': 'index'
-        }
-        env = {
-            'ZOOG_TUNID': config.tunid
-        }
-        self.append_args(config.zftp_bin)
-        self.append_args(options)
-        self._env = env
-        self._cwd = config.zftp_dir
-
-
-class Coordinator(ProcessBase):
-    def __init__(self, config):
-        super(Coordinator, self).__init__()
-        env = {
-            'ZOOG_TUNID': config.tunid
-        }
-        self.append_args(config.coordinator_bin)
-        self._env = env
-        self._cwd = config.coordinator_dir
-
-
-class Monitor(ProcessBase):
-    def __init__(self, config, pico_id, internal_ip=None, resume=False):
-        super(Monitor, self).__init__()
-        self.append_args(config.monitor_bin)
-        options = {
-            '--wait-for-core': 'false',
-            '--image-file': config.monitor_image,
-            '--pico-id': str(pico_id),
-        }
-        self.append_args(options)
-        if internal_ip:
-            self.append_args({'--assign-in-address': internal_ip})
-        if resume:
-            self.append_args('--resume')
-        env = {
-            'ZOOG_TUNID': config.tunid
-        }
-        self._env = env
-        self._cwd = os.path.join(config.pico_dir, str(pico_id))
-
-    def checkpoint(self):
-        self.send_signal(signal.SIGUSR2)
-
 
 class S3Fetcher(ProcessBase):
     def __init__(self, config, s3url, fullpath, callback=None):
@@ -349,6 +296,61 @@ class S3Manager:
         uploader.run()
 
 
+class Zftp(ProcessBase):
+    def __init__(self, config):
+        super(Zftp, self).__init__()
+        options = {
+            '--origin-filesystem': 'true',
+            '--origin-reference': 'true',
+            '--listen-zftp': 'tunid',
+            '--listen-lookup': 'tunid',
+            '--index-dir': 'index'
+        }
+        env = {
+            'ZOOG_TUNID': config.tunid
+        }
+        self.append_args(config.zftp_bin)
+        self.append_args(options)
+        self._env = env
+        self._cwd = config.zftp_dir
+
+
+class Coordinator(ProcessBase):
+    def __init__(self, config):
+        super(Coordinator, self).__init__()
+        env = {
+            'ZOOG_TUNID': config.tunid
+        }
+        self.append_args(config.coordinator_bin)
+        self._env = env
+        self._cwd = config.coordinator_dir
+
+
+class Monitor(ProcessBase):
+    def __init__(self, config, pico):
+        super(Monitor, self).__init__()
+        self.pico = pico
+        self.append_args(config.monitor_bin)
+        options = {
+            '--wait-for-core': 'false',
+            '--image-file': config.monitor_image,
+            '--pico-id': str(pico.pico_id),
+        }
+        self.append_args(options)
+        if pico.internal_ip:
+            self.append_args({'--assign-in-address': pico.internal_ip})
+        if pico.resume:
+            self.append_args('--resume')
+        env = {
+            'ZOOG_TUNID': config.tunid
+        }
+        self._env = env
+        self._cwd = os.path.join(config.pico_dir, str(pico.pico_id))
+
+    def checkpoint(self):
+        self.send_signal(signal.SIGUSR2)
+
+
 class Pico:
 
     INIT = 0
@@ -368,16 +370,18 @@ class Pico:
         self.should_alive = None
 
     def execute(self):
+        # if not (self.status != Pico.INIT and self.status != Pico.STOPPED):
+        #     return
         if self.monitor:
             return
         self.should_alive = None
-        self.monitor = Monitor(self.config, self.pico_id, self.internal_ip,
-                               self.resume)
+        self.monitor = Monitor(self.config, self)
         self.monitor.run()
         self.status = Pico.RUN
 
     def checkpoint(self):
-        if self.monitor and self.status != Pico.STOPPED:
+        if self.monitor and self.status != Pico.STOPPED and \
+                            self.status != Pico.CHECKPOINT:
             self.status = Pico.CHECKPOINT
             self.monitor.checkpoint()
 
@@ -394,27 +398,30 @@ class PicoManager:
     def __init__(self, config):
         self.config = config
         self._picos = {} # pico_id -> pico
-        self._running_picos = {} # pid -> pico
+        # self._running_picos = {} # pid -> pico
         ProcessBase.add_process_stop_listener(self._process_stop_listener)
 
     def _process_stop_listener(self, p):
         pid = p.pid # p is the monitor
-        pico = self._running_picos.get(pid, None)
-        if pico is None:
+        if not hasattr(p, 'pico'):
             return
+        monitor = p
+        pico = p.pico
         pico.status = Pico.STOPPED
-        del self._running_picos[pid]
+        pico.monitor = None
+        # del self._running_picos[pid]
         if pico.checkpoint_callback:
             pico.checkpoint_callback(pico)
+            # should I reset checkpoint_callback?
         if pico.should_alive:
             self._resume(pico)
 
-    def _add_running_pico(self, pico):
-        assert pico.pid > 0
-        assert pico.pid not in self._running_picos
-        self._running_picos[pico.pid] = pico
-        if pico.pico_id not in self._picos:
-            self._picos[pico.pico_id] = pico
+    # def _add_running_pico(self, pico):
+    #     assert pico.pid > 0
+    #     assert pico.pid not in self._running_picos
+    #     self._running_picos[pico.pid] = pico
+    #     if pico.pico_id not in self._picos:
+    #         self._picos[pico.pico_id] = pico
 
     def get_pico_by_id(self, pico_id):
         return self._picos.get(pico_id, None)
@@ -424,14 +431,24 @@ class PicoManager:
         logger.info('pico.execute(pico_id=%d, internal_ip=%s, resume=%s)'+
                     ' => pid=%s', pico.pico_id, pico.internal_ip, pico.resume,
                     pico.pid)
-        self._add_running_pico(pico)
+        # self._add_running_pico(pico)
 
     def _resume(self, pico):
         pico.resume = True
         self._execute(pico)
 
     def execute(self, pico_id, internal_ip, resume):
-        pico = Pico(self.config, pico_id, internal_ip, resume)
+        pico = self.get_pico_by_id(pico_id)
+        if pico is None:
+            pico = Pico(self.config, pico_id, internal_ip, resume)
+            self._picos[pico_id] = pico
+        else:
+            if pico.status == Pico.RUN or pico.status == Pico.CHECKPOINT:
+                logger.warn('PicoManager.execute fail: %s', 
+                            'pico is running or checkpointing.')
+                return
+            pico.resume = resume
+            assert resume
         self._execute(pico)
 
     def checkpoint(self, pico_id, callback=None):
@@ -472,7 +489,7 @@ class Worker:
         self.zftp = None
         self.has_started = False
         self.is_stopping = False
-        self.picos = PicoManager(config)
+        self.picoman = PicoManager(config)
         self.s3man = S3Manager(config)
 
     def _check_coordinator_ready(self):
@@ -496,7 +513,7 @@ class Worker:
             s3url = 's3://{0}/pico/{1}/{2}'.format(
                 self.config.s3_bucket, pico_id, self.config.monitor_swap_file)
             self.s3man.download_sync(s3url)
-        self.picos.execute(pico_id, internal_ip, resume)
+        self.picoman.execute(pico_id, internal_ip, resume)
 
     def pico_release(self, pico_id):
         def ckpt_callback(pico):
@@ -507,13 +524,13 @@ class Worker:
             fullpaths.append(fmt.format(self.config.worker_var_dir, pico_id,
                                         self.config.monitor_swap_page))
             self.s3man.upload(fullpaths)
-        self.picos.checkpoint(pico_id, ckpt_callback)
+        self.picoman.checkpoint(pico_id, ckpt_callback)
         
     def pico_kill(self, pico_id):
-        self.picos.kill(pico_id)
+        self.picoman.kill(pico_id)
 
     def pico_ensure_alive(self, pico_id):
-        self.picos.ensure_alive(pico_id)
+        self.picoman.ensure_alive(pico_id)
 
     def start(self):
         if self.has_started:
@@ -566,7 +583,7 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
 
     import code
-    picos = worker.picos
+    picoman = worker.picoman
     code.interact(local=locals())
 
 def wait_all_processes():
