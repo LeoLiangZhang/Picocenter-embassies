@@ -1255,7 +1255,7 @@ void ZoogVM::_load_swap(const char *core_file, struct swap_vm **out_vm)
 	lite_assert(fp_swap!=NULL);
 
 	FILE *fp_page = fopen(pagefile, "r");
-	lite_assert(fp_page!=NULL);
+	// lite_assert(fp_page!=NULL);
 
 	// CoreFile c;
 	// corefile_read(fp, &c);

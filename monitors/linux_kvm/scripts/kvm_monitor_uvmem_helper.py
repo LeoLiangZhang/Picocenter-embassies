@@ -76,11 +76,11 @@ def _measure_webpage_load():
     if ret == 0: # child
         t1 = time.time()
         logger.warning('Measure in Child')
-        rc = os.system('bash -c "time curl 10.2.0.5:8080"')
-        # import urllib2
-        # response = urllib2.urlopen('http://10.2.0.5:8080/')
-        # html = response.read()
-        # print html
+        # rc = os.system('bash -c "time curl 10.2.0.5:8080"')
+        import urllib2
+        response = urllib2.urlopen('http://10.2.0.5:8080/')
+        html = response.read()
+        print html
         t2 = time.time()
         global accumlated_fetching_time
         logger.warning('PAGE_MULTIPLIER=%d, block_size=%d KB, CACHE_CAPACITY=%d, cache_size=%d KB,'+
@@ -125,7 +125,15 @@ class FilePageLoader(object):
     
     def load(self, page_file_offset):
         self.f_page.seek(page_file_offset)
+        t1 = time.time()
         page_data = self.f_page.read(page_size)
+        t2 = time.time()
+        ts = t2 - t1
+
+        global accumlated_fetching_time
+        accumlated_fetching_time += ts
+        logger.debug("page_size disk read: time=%f s, acc_time=%f s", 
+                     ts, accumlated_fetching_time)
         return page_data
 
 
@@ -184,12 +192,15 @@ def serve_pages(loader):
     n_pages = 0
     nr_pages = map_size / page_size
 
+    accumlated_paging_time = .0
+
     while n_pages < nr_pages:
         data = f_uvmem.read(32*8)
         logger.debug('f_uvmem.read %s %s', len(data), 'bytes')
 
         i = 0
         while i < len(data):
+            t1 = time.time()
             pg_data = data[i:i+8] # 8 is the size of longlong
             pg = struct.unpack('Q', pg_data)[0]
             vaddr = pg * page_size + 0x10001000L
@@ -206,10 +217,16 @@ def serve_pages(loader):
             # logger.debug('Write to shmem at %s', shmem_offset)
 
             f_uvmem.write(pg_data)
-            logger.debug('f_uvmem.write(page=%s)', hex(pg))
+            t2 = time.time()
+            ts = t2-t1
+            accumlated_paging_time += ts
+            logger.debug('f_uvmem.write(page=%s): time=%f s, accumlated_paging_time=%f', 
+                hex(pg), ts, accumlated_paging_time)
 
             i += 8
 
-# measure_webpage_load()
-serve_pages(FilePageLoader(page_fd))
-# serve_pages(S3PageLoader())
+measure_webpage_load()
+if page_fd >= 0:
+    serve_pages(FilePageLoader(page_fd))
+else:
+    serve_pages(S3PageLoader())

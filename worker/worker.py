@@ -6,6 +6,7 @@ import sys, os
 import time, subprocess, signal
 import logging, datetime
 from urlparse import urlparse
+import shutil
 
 import boto, boto.utils
 
@@ -78,6 +79,8 @@ class WorkerConfig(ConfigBase):
     zftp_dir = os.path.join(worker_var_dir, 'zftp')
     coordinator_dir = os.path.join(worker_var_dir, 'coordinator')
     pico_dir = os.path.join(worker_var_dir, 'pico')
+    pico_path_fmt = os.path.join(pico_dir, '{0}', '{1}')
+    # /$pico_dir/{0:pico_id}/{1:file}
 
     zftp_bin = os.path.join(EMBASSIES_ROOT, 'toolchains/linux_elf',
                             'zftp_backend/build/zftp_backend')
@@ -193,7 +196,7 @@ class ProcessBase(object):
                     try:
                         p.stop_callback(p)
                     except Exception as e:
-                        fmt = 'Error raised in process_stop_callback: %s'
+                        fmt = 'Error raised in stop_callback: %s'
                         logger.critical(fmt, e)
         signal.signal(signal.SIGCHLD, sigchld_handler)
 
@@ -291,7 +294,7 @@ class S3Manager:
                 uploader.pid, uploader.returncode, t2-t1, fullpaths)
             if callback:
                 callback(uploader)
-        uploader = S3Uploader(self.config, fullpaths)
+        uploader = S3Uploader(self.config, fullpaths, callback=_callback)
         self.uploaders[uploader] = uploader
         uploader.run()
 
@@ -357,6 +360,7 @@ class Pico:
     RUN = 1
     CHECKPOINT = 2
     STOPPED = 3
+    EXIT = 4
 
     def __init__(self, config, pico_id, internal_ip=None, resume=False):
         self.config = config
@@ -367,7 +371,8 @@ class Pico:
         self.status = Pico.INIT
         self.stop_callback = None
         self.checkpoint_callback = None
-        self.should_alive = None
+        # should_alive: None if not set, False if killed, True if ensure_alive
+        self.should_alive = None 
 
     def execute(self):
         # if not (self.status != Pico.INIT and self.status != Pico.STOPPED):
@@ -386,7 +391,8 @@ class Pico:
             self.monitor.checkpoint()
 
     def kill(self):
-        if self.monitor and self.status != Pico.STOPPED:
+        # cannot kill a pico in checkpointing
+        if self.monitor and self.status == Pico.RUN:
             self.monitor.kill()
 
     @property
@@ -395,10 +401,10 @@ class Pico:
 
 
 class PicoManager:
-    def __init__(self, config):
+    def __init__(self, config, pico_exit_callback=None):
         self.config = config
         self._picos = {} # pico_id -> pico
-        # self._running_picos = {} # pid -> pico
+        self.pico_exit_callback = pico_exit_callback
         ProcessBase.add_process_stop_listener(self._process_stop_listener)
 
     def _process_stop_listener(self, p):
@@ -407,21 +413,20 @@ class PicoManager:
             return
         monitor = p
         pico = p.pico
-        pico.status = Pico.STOPPED
+        if pico.status == Pico.CHECKPOINT:
+            pico.status = Pico.STOPPED
+        else:
+            pico.status = Pico.EXIT
         pico.monitor = None
-        # del self._running_picos[pid]
         if pico.checkpoint_callback:
             pico.checkpoint_callback(pico)
             # should I reset checkpoint_callback?
-        if pico.should_alive:
+        if pico.status == Pico.STOPPED and pico.should_alive:
             self._resume(pico)
-
-    # def _add_running_pico(self, pico):
-    #     assert pico.pid > 0
-    #     assert pico.pid not in self._running_picos
-    #     self._running_picos[pico.pid] = pico
-    #     if pico.pico_id not in self._picos:
-    #         self._picos[pico.pico_id] = pico
+        elif pico.status == Pico.EXIT:
+            # got killed or pico exited
+            self.pico_exit_callback(pico)
+            # self.release(pico.pico_id)
 
     def get_pico_by_id(self, pico_id):
         return self._picos.get(pico_id, None)
@@ -431,7 +436,6 @@ class PicoManager:
         logger.info('pico.execute(pico_id=%d, internal_ip=%s, resume=%s)'+
                     ' => pid=%s', pico.pico_id, pico.internal_ip, pico.resume,
                     pico.pid)
-        # self._add_running_pico(pico)
 
     def _resume(self, pico):
         pico.resume = True
@@ -442,36 +446,58 @@ class PicoManager:
         if pico is None:
             pico = Pico(self.config, pico_id, internal_ip, resume)
             self._picos[pico_id] = pico
+            self._execute(pico)
         else:
-            if pico.status == Pico.RUN or pico.status == Pico.CHECKPOINT:
-                logger.warn('PicoManager.execute fail: %s', 
-                            'pico is running or checkpointing.')
-                return
-            pico.resume = resume
-            assert resume
-        self._execute(pico)
+            msg = 'PicoManager.execute fail: Pico(id=%s, status=%s) exists.'
+            # use ensure_alive or release then execute
+            logger.warn(msg, pico_id, pico.status)
 
     def checkpoint(self, pico_id, callback=None):
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
+            logger.warn('PicoManager.checkpoint: pico(id=%s) not found.',
+                        pico_id)
             return
         pico.checkpoint_callback = callback
-        pico.checkpoint()
+        if pico.status == Pico.STOPPED:
+            if callback:
+                callback(pico)
+        else:
+            pico.checkpoint()
 
     def kill(self, pico_id):
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
+            logger.warn('PicoManager.kill: pico(id=%s) not found.', pico_id)
             return
         pico.should_alive = False
         pico.kill()
 
     def release(self, pico_id):
+        '''Try to release the pico.
+
+        Return False if the pico has ensure_alive flag, or True when all 
+        resources are free.
+        '''
+        pico = self.get_pico_by_id(pico_id)
+        if pico is None:
+            logger.warn('PicoManager.release: pico(id=%s) not found.',
+                        pico_id)
+            return True
+        if pico.should_alive:
+            return False
+        fmt = self.config.pico_path_fmt
+        pico_dir = fmt.format(pico_id, '')
+        shutil.rmtree(pico_dir)
         del self._picos[pico_id]
+        logger.debug('PicoManager.release %s', pico_dir)
 
     def ensure_alive(self, pico_id):
         # TODO: This funciton needs more testing, especially CHECKPOINT case
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
+            logger.warn('PicoManager.ensure_alive: pico(id=%s) not found.',
+                        pico_id)
             return # pico not exist, ignore
         if pico.status == Pico.RUN:
             return
@@ -489,8 +515,11 @@ class Worker:
         self.zftp = None
         self.has_started = False
         self.is_stopping = False
-        self.picoman = PicoManager(config)
+        self.picoman = PicoManager(config, self.pico_exit_callback)
         self.s3man = S3Manager(config)
+
+    def pico_exit_callback(self, pico):
+        self.picoman.release(pico.pico_id)
 
     def _check_coordinator_ready(self):
         tunid = self.config.tunid
@@ -517,14 +546,17 @@ class Worker:
 
     def pico_release(self, pico_id):
         def ckpt_callback(pico):
-            fmt = '{0}/pico/{1}/{2}'
+            fmt = self.config.pico_path_fmt
             fullpaths = []
-            fullpaths.append(fmt.format(self.config.worker_var_dir, pico_id,
-                                        self.config.monitor_swap_file))
-            fullpaths.append(fmt.format(self.config.worker_var_dir, pico_id,
-                                        self.config.monitor_swap_page))
-            self.s3man.upload(fullpaths)
+            fullpaths.append(fmt.format(pico_id, self.config.monitor_swap_file))
+            fullpaths.append(fmt.format(pico_id, self.config.monitor_swap_page))
+            def _release(uploader):
+                self.picoman.release(pico_id)
+            self.s3man.upload(fullpaths, callback=_release)
         self.picoman.checkpoint(pico_id, ckpt_callback)
+
+    def pico_nap(self, pico_id):
+        self.picoman.checkpoint(pico_id)
         
     def pico_kill(self, pico_id):
         self.picoman.kill(pico_id)
