@@ -14,6 +14,8 @@ PICO_FIELDS = "pico_id,hot,worker_id,public_ip,internal_ip,ports,hostname,custom
 WORKER_FIELDS = "worker_id,status,heart_ip,heart_port"
 ADDR_FIELDS = "worker_id,public_ip,ports_allocated,port_80_allocated"
 
+# True = resume, false = fresh 
+
 ################################################################################
 
 class PicoManager(object):

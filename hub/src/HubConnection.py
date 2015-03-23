@@ -133,6 +133,9 @@ class HubConnection(object):
             [-1] error (not connected to hub)
         """
 
+	# set alarm 
+	# need to look up public_ips
+
         endpoint = "tcp://" + self.hub_ip + ':' + self.hub_port
 
         self.send_socket = zmq.Context().socket(zmq.DEALER)
