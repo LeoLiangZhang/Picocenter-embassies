@@ -40,7 +40,10 @@ schroot -- bash -c "cd /elasticity/embassies/ && ZOOG_TUNID=2 ./monitors/linux_k
 
 **Recently updated options for the monitor**
 
-ZOOG_TUNID=2 ./monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file ./toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file nginx2.kvm.swap --assign-in-address 10.2.0.2 --resume --pico-id 42
+ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file nginx2.kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume 
+
+** on Ravello **
+ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file pico-42.kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume
 
 
 ## Checkpointing
@@ -103,7 +106,10 @@ sudo pip install ordereddict boto
 
 Install in schroot.
 
-schroot -- sudo apt-get install python2.6-dev iptables curl python-pip
+net-tools - ifconfig utils
+procps - ps pgrep pkill etc.
+
+schroot -- sudo apt-get install python2.6-dev iptables curl python-pip net-tools procps
 
 ## Ravello deployment
 
@@ -131,3 +137,5 @@ liang@neutron:criu-1.4$ sudo ./criu check
 prctl: PR_SET_MM_MAP is not supported, which is required for restoring user namespaces
 Error (timerfd.c:56): timerfd: No timerfd support for c/r: Inappropriate ioctl for device
 Error (cr-check.c:308): fdinfo doesn't contain the mnt_id field
+
+ssh -i ~/.ssh/id_rsa ubuntu@ubuntu1404kvm-embassieskvmonaws-ownzaq3s.srv.ravcloud.com
