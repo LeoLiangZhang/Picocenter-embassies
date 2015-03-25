@@ -93,6 +93,7 @@ def _measure_webpage_load():
 def measure_webpage_load():
     import threading
     t = threading.Thread(target=_measure_webpage_load)
+    # should I use daemon thread?
     t.start()
 
 class LRUCache:
@@ -225,7 +226,7 @@ def serve_pages(loader):
 
             i += 8
 
-measure_webpage_load()
+# measure_webpage_load()
 if page_fd >= 0:
     serve_pages(FilePageLoader(page_fd))
 else:

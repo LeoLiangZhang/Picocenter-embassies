@@ -99,8 +99,9 @@ Install these in schroot with pip, e.g., sudo pip install ...
 * pyzmq - ZeroMQ python binding
 * ordereddict - use by LRU cache implementation 
 * boto - python API to AWS
+* tornado (v4.1) - use IOLoop and its async framework
 
-sudo pip install ordereddict boto 
+sudo pip install ordereddict boto pyzmq tornado
 
 ## System
 
