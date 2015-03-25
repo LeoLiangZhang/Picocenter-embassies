@@ -4,40 +4,18 @@ KVM picoprocesses.
 
 import sys, os
 import time, subprocess, signal
-import logging, datetime
+
 from urlparse import urlparse
 import shutil
 
 import boto, boto.utils
 
-EMBASSIES_ROOT = '/elasticity/embassies'
-LOGGER_NAME = 'picocenter_worker'
-LOGGER_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
-LOGGER_DATEFMT= '%Y-%m-%d %H:%M:%S.%f'
+import config, iptables
+logger = config.logger
 
-class MicrosecondFormatter(logging.Formatter):
-    converter=datetime.datetime.fromtimestamp
-    def formatTime(self, record, datefmt=None):
-        ct = self.converter(record.created)
-        if datefmt:
-            s = ct.strftime(datefmt)
-        else:
-            t = ct.strftime("%Y-%m-%d %H:%M:%S")
-            s = "%s,%06d(%f)" % (t, ct.microsecond, record.created)
-        return s
-
-# Set the root logger level to debug will print boto's logging.
-# logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(LOGGER_NAME)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stdout)
-formatter = MicrosecondFormatter(LOGGER_FORMAT, datefmt=LOGGER_DATEFMT)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-del handler, formatter
-
-
-######## Helper functions #########
+######################
+## Helper functions ##
+######################
 def ensure_dir_exit(path):
     if not os.path.isdir(path):
         os.makedirs(path, mode=0775)
@@ -53,52 +31,9 @@ def open_input_output(path):
     f_stderr = open(stderr_path, 'wb')
     return f_stdin, f_stdout, f_stderr
 
-########## Helper ends ############
-
-
-class ConfigBase:
-    def __init__(self, **kwargs):
-        for k, val in kwargs.iteritems():
-            setattr(self, k, val)
-
-    def __str__(self):
-        lst = dir(self)
-        result = self.__class__.__name__
-        tups = ['{0}={1}'.format(s, repr(getattr(self, s))) for s in lst 
-                if not s.startswith('_')]
-        result += '(' + ', '.join(tups) + ')'
-        return result
-
-
-class WorkerConfig(ConfigBase):
-    '''The type for all item value is str.
-    '''
-    worker_var_dir = os.path.join(EMBASSIES_ROOT, 'var', 'worker')
-    tunid = '2'
-
-    zftp_dir = os.path.join(worker_var_dir, 'zftp')
-    coordinator_dir = os.path.join(worker_var_dir, 'coordinator')
-    pico_dir = os.path.join(worker_var_dir, 'pico')
-    pico_path_fmt = os.path.join(pico_dir, '{0}', '{1}')
-    # /$pico_dir/{0:pico_id}/{1:file}
-
-    zftp_bin = os.path.join(EMBASSIES_ROOT, 'toolchains/linux_elf',
-                            'zftp_backend/build/zftp_backend')
-    coordinator_bin = os.path.join(EMBASSIES_ROOT, 'monitors/linux_kvm',
-                                   'coordinator/build/zoog_kvm_coordinator')
-    monitor_bin = os.path.join(EMBASSIES_ROOT, 'monitors/linux_kvm',
-                               'monitor/build/zoog_kvm_monitor')
-    monitor_image = os.path.join(EMBASSIES_ROOT, 'toolchains/linux_elf',
-                                 'elf_loader/build/elf_loader.nginx.signed')
-    monitor_swap_file = 'kvm.swap'
-    monitor_swap_page = 'kvm.swap.page'
-
-    python_bin = '/usr/bin/python'
-    s3put = '/usr/local/bin/s3put'
-    s3fetch = '/usr/local/bin/fetch_file'
-    s3_bucket = 'elasticity-storage'
-
-
+########################
+## Process Management ##
+########################
 class ProcessBase(object):
     """Provide basic control for process."""
     def __init__(self):
@@ -177,7 +112,10 @@ class ProcessBase(object):
             try:
                 ret = os.waitpid(-1, os.WNOHANG)
             except OSError as e:
-                logger.warn('In sigchld_handler, os.waitpid() raised %s.', e)
+                if e.errno == 10: # No child processes.
+                    return
+                logger.debug('In sigchld_handler, os.waitpid() raised %s.', e)
+                return
             logger.debug('os.waitpid() => %s', ret)
             if ret is None:
                 return
@@ -354,6 +292,9 @@ class Monitor(ProcessBase):
         self.send_signal(signal.SIGUSR2)
 
 
+#################
+## Picoprocess ##
+#################
 class Pico:
 
     INIT = 0
@@ -506,7 +447,9 @@ class PicoManager:
         elif pico.status == Pico.CHECKPOINT:
             pico.should_alive = True
 
-
+################
+## The Worker ##
+################
 class Worker:
 
     def __init__(self, config):
@@ -602,8 +545,36 @@ class Worker:
         self._kill_processes([self.zftp, self.coordinator])
 
 
+def main_event_loop():
+    _config = config.WorkerConfig()
+    logger.debug(_config)
+
+    worker = Worker(_config)
+
+    import zmq, zmq.eventloop
+    ioloop = zmq.eventloop.ioloop
+    loop = ioloop.ZMQIOLoop()
+    loop.install()
+    
+    # iptables.dnat('192.168.1.50', 8080, 'tcp', '10.2.0.5', 8080)
+    # iptables.log('192.168.1.50', 8080, 'tcp')
+    def sigint_handler(sig, frame):
+        logger.critical('Receive SIGINT. Stopping...')
+        loop.stop()
+    signal.signal(signal.SIGINT, sigint_handler)
+
+    import interface
+
+    server = interface.TcpEvalServer(worker)
+    server.listen(1234)
+    log_listener = iptables.IptablesLogListener()
+    log_listener.bind(loop)
+
+    loop.start()
+
+
 def main():
-    config = WorkerConfig()
+    config = config.WorkerConfig()
     logger.debug(config)
 
     worker = Worker(config)
@@ -625,12 +596,13 @@ def wait_all_processes():
         time.sleep(1)
 
 def test():
-    config = WorkerConfig()
+    config = config.WorkerConfig()
     s3man = S3Manager(config)
     s3man.download('s3://elasticity-storage/pico/42/kvm.swap')
     s3man.upload([config.worker_var_dir+'/pico/5/test'])
     wait_all_processes()
 
 if __name__ == '__main__':
-    main()
+    # main()
+    main_event_loop()
     # test()
