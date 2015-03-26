@@ -21,8 +21,7 @@ class TcpEvaluator:
         # logger.debug('read_line')
         try:
             if data.strip():
-                d = locals()
-                d['worker'] = self.server.worker
+                worker = self.server.worker
                 result = eval(data)
                 self.write(str(result))
                 self.write('\n')
@@ -34,6 +33,7 @@ class TcpEvaluator:
 
     def read_next(self):
         # logger.debug('read_next')
+        # self.write('>>> ')
         self.stream.read_until('\n', self.read_line)
 
     def write(self, data):

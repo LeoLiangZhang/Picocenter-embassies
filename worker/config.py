@@ -84,3 +84,5 @@ class WorkerConfig(ConfigBase):
 
     log_udp_port = 12345
     log_bind_ip = '127.0.0.1'
+
+    eval_tcp_port = 1234

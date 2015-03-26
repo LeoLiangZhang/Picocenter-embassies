@@ -184,6 +184,7 @@ class S3Uploader(ProcessBase):
         self.stop_callback = callback
         self._cwd = os.path.join(os.path.dirname(fullpaths[0]), 's3put')
 
+
 class S3Manager:
     def __init__(self, config):
         self.config = config
@@ -303,10 +304,11 @@ class Pico:
     STOPPED = 3
     EXIT = 4
 
-    def __init__(self, config, pico_id, internal_ip=None, resume=False):
+    def __init__(self, config, pico_id, internal_ip=None, portmaps=[], resume=False):
         self.config = config
         self.pico_id = pico_id
         self.internal_ip = internal_ip
+        self.portmaps = portmaps
         self.resume = resume
         self.monitor = None
         self.status = Pico.INIT
@@ -382,10 +384,10 @@ class PicoManager:
         pico.resume = True
         self._execute(pico)
 
-    def execute(self, pico_id, internal_ip, resume):
+    def execute(self, pico_id, internal_ip, portmaps, resume):
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
-            pico = Pico(self.config, pico_id, internal_ip, resume)
+            pico = Pico(self.config, pico_id, internal_ip, portmaps, resume)
             self._picos[pico_id] = pico
             self._execute(pico)
         else:
@@ -413,6 +415,7 @@ class PicoManager:
             return
         pico.should_alive = False
         pico.kill()
+        del self._picos[pico_id]
 
     def release(self, pico_id):
         '''Try to release the pico.
@@ -447,6 +450,67 @@ class PicoManager:
         elif pico.status == Pico.CHECKPOINT:
             pico.should_alive = True
 
+
+class PortMapper:
+    def __init__(self, picoman):
+        self.mapping = {}
+        self.picoman = picoman
+
+    def add_mappings(self, pico_id, portmaps):
+        for portmap in portmaps:
+            port_key = portmap.port_key
+            self.mapping[port_key] = pico_id
+
+    def remove_mappings(self, pico_id):
+        pico = self.picoman.get_pico_by_id(pico_id)
+        portmaps = pico.portmaps
+        for portmap in portmaps:
+            port_key = portmap.port_key
+            del self.mapping[port_key]
+
+    def add_pico(self, pico_id):
+        pico = self.picoman.get_pico_by_id(pico_id)
+        portmaps = pico.portmaps
+        pico_id = pico.pico_id
+        self.add_mappings(pico_id, portmaps)
+        self.install_dnat(pico_id)
+
+    def remove_pico(self, pico_id):
+        self.delete_dnat(pico_id)
+        self.delete_log(pico_id) # TODO: is it necessary?
+        self.remove_mappings(pico_id)
+
+    def find(self, port_key):
+        return self.mapping.get(port_key, None)
+
+    def _dnat_func(self, pico_id, func):
+        pico = self.picoman.get_pico_by_id(pico_id)
+        portmaps = pico.portmaps
+        for portmap in portmaps:
+            dip, dport, proto, tip, tport = (portmap.dip, portmap.dport,
+                portmap.proto, portmap.tip, portmap.tport)
+            func(dip, dport, proto, tip, tport)
+
+    def install_dnat(self, pico_id):
+        self._dnat_func(pico_id, iptables.dnat)
+
+    def delete_dnat(self, pico_id):
+        self._dnat_func(pico_id, iptables.delete_dnat)
+
+    def _log_func(self, pico_id, func):
+        pico = self.picoman.get_pico_by_id(pico_id)
+        portmaps = pico.portmaps
+        for portmap in portmaps:
+            dip, dport, proto = (portmap.dip, portmap.dport, portmap.proto)
+            func(dip, dport, proto)
+
+    def install_log(self, pico_id):
+        self._log_func(pico_id, iptables.log)
+
+    def delete_log(self, pico_id):
+        self._log_func(pico_id, iptables.delete_log)
+
+
 ################
 ## The Worker ##
 ################
@@ -460,9 +524,16 @@ class Worker:
         self.is_stopping = False
         self.picoman = PicoManager(config, self.pico_exit_callback)
         self.s3man = S3Manager(config)
+        self.portmapper = PortMapper(self.picoman)
 
     def pico_exit_callback(self, pico):
         self.picoman.release(pico.pico_id)
+
+    def port_callback(self, dip, dport, proto):
+        port_key = iptables.get_port_key(dip, dport, proto)
+        pico_id = self.portmapper.find(port_key)
+        if pico_id:
+            self.pico_ensure_alive(pico_id)
 
     def _check_coordinator_ready(self):
         tunid = self.config.tunid
@@ -480,12 +551,14 @@ class Worker:
         if self.coordinator.stopped and self.zftp.stopped:
             exit()
 
-    def pico_exec(self, pico_id, internal_ip, resume):
+    def pico_exec(self, pico_id, internal_ip, s_portmaps, resume):
         if resume:
             s3url = 's3://{0}/pico/{1}/{2}'.format(
                 self.config.s3_bucket, pico_id, self.config.monitor_swap_file)
             self.s3man.download_sync(s3url)
-        self.picoman.execute(pico_id, internal_ip, resume)
+        portmaps = iptables.convert_portmaps(s_portmaps)
+        self.picoman.execute(pico_id, internal_ip, portmaps, resume)
+        self.portmapper.add_pico(pico_id)
 
     def pico_release(self, pico_id):
         def ckpt_callback(pico):
@@ -496,16 +569,22 @@ class Worker:
             def _release(uploader):
                 self.picoman.release(pico_id)
             self.s3man.upload(fullpaths, callback=_release)
+        self.portmapper.remove_pico(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
 
     def pico_nap(self, pico_id):
-        self.picoman.checkpoint(pico_id)
+        def ckpt_callback(pico):
+            pass
+        self.portmapper.install_log(pico_id)
+        self.picoman.checkpoint(pico_id, ckpt_callback)
         
     def pico_kill(self, pico_id):
+        self.portmapper.remove_pico(pico_id)
         self.picoman.kill(pico_id)
 
     def pico_ensure_alive(self, pico_id):
         self.picoman.ensure_alive(pico_id)
+        self.portmapper.delete_log(pico_id)
 
     def start(self):
         if self.has_started:
@@ -549,8 +628,6 @@ def main_event_loop():
     _config = config.WorkerConfig()
     logger.debug(_config)
 
-    worker = Worker(_config)
-
     import zmq, zmq.eventloop
     ioloop = zmq.eventloop.ioloop
     loop = ioloop.ZMQIOLoop()
@@ -564,6 +641,11 @@ def main_event_loop():
     signal.signal(signal.SIGINT, sigint_handler)
 
     import interface
+
+    worker = Worker(_config)
+    worker.start()
+
+    worker.pico_exec(5, '10.2.0.5', '10.10.108.14:4040.tcp=10.2.0.5:8080', False)
 
     server = interface.TcpEvalServer(worker)
     server.listen(1234)
