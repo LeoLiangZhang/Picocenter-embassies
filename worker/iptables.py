@@ -57,7 +57,7 @@ def delete_log(dip, dport, proto):
             config.IPTABLES_ARG_LOG_PREFIX]
     args = map(str, args)
     rc = subprocess.call(args)
-    logger.debug('iptables.log %s:%s.%s', dip, dport, proto)
+    logger.debug('iptables.delete_log %s:%s.%s', dip, dport, proto)
     return rc == 0
 
 
