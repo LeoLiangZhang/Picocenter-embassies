@@ -67,20 +67,26 @@ class IptablesLogListener:
     def __init__(self):
         self.sock = None
         self.loop = None
+        self.port_callback = None
 
     def read_log(self, data):
         lst = data.split()
         dst = ''
         port = ''
+        proto = ''
         for item in lst:
             if item.startswith('DST='):
                 dst = item[4:]
             elif item.startswith('DPT='):
                 port = item[4:]
-            if dst and port:
+            elif item.startswith('PROTO='):
+                proto = item[6:]
+            if dst and port and proto:
                 break
-        logger.debug('IptablesLogListener received request for (%s:%s).',
-                     dst, port)
+        logger.debug('IptablesLogListener received request for (%s:%s.%s).',
+                     dst, port, proto)
+        if self.port_callback:
+            self.port_callback(dst, port, proto)
 
     def _read_handler(self, fd, events):
         while True:

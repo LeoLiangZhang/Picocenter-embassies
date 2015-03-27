@@ -552,6 +552,8 @@ class Worker:
             exit()
 
     def pico_exec(self, pico_id, internal_ip, s_portmaps, resume):
+        logger.info('pico_exec(%s, %s, %s, %s)', 
+            pico_id, internal_ip, s_portmaps, resume)
         if resume:
             s3url = 's3://{0}/pico/{1}/{2}'.format(
                 self.config.s3_bucket, pico_id, self.config.monitor_swap_file)
@@ -561,6 +563,7 @@ class Worker:
         self.portmapper.add_pico(pico_id)
 
     def pico_release(self, pico_id):
+        logger.info('pico_release(%s)', pico_id)
         def ckpt_callback(pico):
             fmt = self.config.pico_path_fmt
             fullpaths = []
@@ -573,16 +576,19 @@ class Worker:
         self.picoman.checkpoint(pico_id, ckpt_callback)
 
     def pico_nap(self, pico_id):
+        logger.info('pico_nap(%s)', pico_id)
         def ckpt_callback(pico):
             pass
         self.portmapper.install_log(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
         
     def pico_kill(self, pico_id):
+        logger.info('pico_kill(%s)', pico_id)
         self.portmapper.remove_pico(pico_id)
         self.picoman.kill(pico_id)
 
     def pico_ensure_alive(self, pico_id):
+        logger.info('pico_ensure_alive(%s)', pico_id)
         self.picoman.ensure_alive(pico_id)
         self.portmapper.delete_log(pico_id)
 
@@ -645,11 +651,13 @@ def main_event_loop():
     worker = Worker(_config)
     worker.start()
 
-    worker.pico_exec(5, '10.2.0.5', '10.10.108.14:4040.tcp=10.2.0.5:8080', False)
+    # proto must be in captital letters
+    # worker.pico_exec(5, '10.2.0.5', '192.168.1.50:4040.TCP=10.2.0.5:8080', False)
 
     server = interface.TcpEvalServer(worker)
     server.listen(1234)
     log_listener = iptables.IptablesLogListener()
+    log_listener.port_callback = worker.port_callback
     log_listener.bind(loop)
 
     loop.start()
