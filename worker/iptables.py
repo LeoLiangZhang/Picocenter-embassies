@@ -4,6 +4,7 @@
 import os, sys
 import subprocess
 import socket, errno
+import re
 
 import config
 logger = config.logger
@@ -25,6 +26,7 @@ def dnat(dip, dport, proto, tip, tport):
             '--to', '%s:%s'%(tip, tport)]
     args = map(str, args)
     rc = subprocess.call(args)
+    logger.debug('iptables.dnat %s:%s.%s=%s:%s', dip, dport, proto, tip, tport)
     return rc == 0
 
 def delete_dnat(dip, dport, proto, tip, tport):
@@ -33,6 +35,7 @@ def delete_dnat(dip, dport, proto, tip, tport):
             '--to', '%s:%s'%(tip, tport)]
     args = map(str, args)
     rc = subprocess.call(args)
+    logger.debug('iptables.delete_dnat %s:%s.%s=%s:%s', dip, dport, proto, tip, tport)
     return rc == 0
 
 def log(dip, dport, proto):
@@ -45,6 +48,7 @@ def log(dip, dport, proto):
             config.IPTABLES_ARG_LOG_PREFIX]
     args = map(str, args)
     rc = subprocess.call(args)
+    logger.debug('iptables.log %s:%s.%s', dip, dport, proto)
     return rc == 0
 
 def delete_log(dip, dport, proto):
@@ -53,6 +57,7 @@ def delete_log(dip, dport, proto):
             config.IPTABLES_ARG_LOG_PREFIX]
     args = map(str, args)
     rc = subprocess.call(args)
+    logger.debug('iptables.delete_log %s:%s.%s', dip, dport, proto)
     return rc == 0
 
 
@@ -62,20 +67,26 @@ class IptablesLogListener:
     def __init__(self):
         self.sock = None
         self.loop = None
+        self.port_callback = None
 
     def read_log(self, data):
         lst = data.split()
         dst = ''
         port = ''
+        proto = ''
         for item in lst:
             if item.startswith('DST='):
                 dst = item[4:]
             elif item.startswith('DPT='):
                 port = item[4:]
-            if dst and port:
+            elif item.startswith('PROTO='):
+                proto = item[6:]
+            if dst and port and proto:
                 break
-        logger.debug('IptablesLogListener received request for (%s:%s).',
-                     dst, port)
+        logger.debug('IptablesLogListener received request for (%s:%s.%s).',
+                     dst, port, proto)
+        if self.port_callback:
+            self.port_callback(dst, port, proto)
 
     def _read_handler(self, fd, events):
         while True:
@@ -97,6 +108,31 @@ class IptablesLogListener:
         sock.bind((ip, port))
         logger.debug('IptablesLogListener UDP socket binds %s:%s', ip, port)
         loop.add_handler(sock.fileno(), self._read_handler, loop.READ)
+
+
+def get_port_key(dip, dport, proto):
+    return '{0}:{1}.{2}'.format(dip, dport, proto)
+
+class PortMap:
+    def __init__(self, dip, dport, proto, tip, tport):
+        self.dip = dip
+        self.dport = dport
+        self.proto = proto
+        self.tip = tip
+        self.tport = tport
+        self.port_key = get_port_key(dip, dport, proto)
+
+re_portmap = re.compile('([\d\.]*):(\d*)\.(\w*)=([\d\.]*):(\d*)')
+def convert_portmaps(str_portmaps):
+    result = []
+    lst = str_portmaps.split(';')
+    for item in lst:
+        m = re_portmap.match(item)
+        if m:
+            dip, dport, proto, tip, tport = m.groups()
+            portmap = PortMap(dip, dport, proto, tip, tport)
+            result.append(portmap)
+    return result
 
 
 def main():
