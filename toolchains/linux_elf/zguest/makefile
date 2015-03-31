@@ -30,6 +30,7 @@ TARGETS=\
 	lighttpd.zguest \
 	python.zguest \
 	monkey.zguest \
+	nodejs.zguest \
 
 
 LWIP_LIB_DIR=$(ZOOG_ROOT)/toolchains/linux_elf/lwip_lib

@@ -654,7 +654,7 @@ def main_event_loop():
     # proto must be in captital letters
     # worker.pico_exec(5, '10.2.0.5', '192.168.1.50:4040.TCP=10.2.0.5:8080', False)
 
-    server = interface.TcpEvalServer(worker)
+    server = interface.TcpEvalServer(worker, io_loop=loop)
     server.listen(1234)
     log_listener = iptables.IptablesLogListener()
     log_listener.port_callback = worker.port_callback
