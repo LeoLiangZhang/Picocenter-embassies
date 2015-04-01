@@ -16,6 +16,7 @@ META_TABLE = 'meta'
 
 import config
 logger = config.logger
+
 ################################################################################
 
 def db_manager_process():
@@ -63,10 +64,11 @@ def monitor_heartbeats():
     monitor_socket = zmq.Context().socket(zmq.DEALER)
     monitor_socket.connect('ipc://db.ipc')
     while True:
-    	logger.debug("Monitoring heartbeats... (workers={0})".format(str(heartbeats)))
+        logger.debug("Heartbeat Monitor: (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
+                del heartbeates[worker]
             else:
                 heartbeats[worker] = 0
         sleep(heartbeat_timeout)
@@ -97,56 +99,54 @@ dispatcher.connect('ipc://db.ipc')
 
 poller = zmq.Poller()
 poller.register(backend, zmq.POLLIN)
-workers = []
+workers = False
 
-logger.debug("Start loop...")
 while True:
-    logger.debug("Start poll...")
     sockets = dict(poller.poll())
-    logger.debug("Poll returned")
 
     ###########################################################################
 
     if backend in sockets:
 
         request = backend.recv_multipart()
-	logger.debug(str(request))
+
         worker, msg = request[:2]
         mtype = msg[0]
 
         if mtype == MessageType.HELLO:
             if not workers:
                 poller.register(frontend, zmq.POLLIN)
-            #new_worker(msg[1:])
-	    worker_ip = worker.split('/')[0]
-            workers.append(worker_ip)
+            worker_ip = worker.split('/')[0]
+            workers = True
             heartbeats[worker_ip] = 0
+            logger.debug("Found new worker: {0}".format(worker_ip))
         elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
             heartbeats[worker_ip] = 1
+            logger.debug("Heartbeat recieved from {0}".format(worker_ip))
         elif mtype == MessageType.PICO_RELEASE or mtype == MessageType.PICO_KILL:
             dispatcher.send(msg)
         elif mtype == MessageType.UPDATE_STATUS:
             worker_ip = worker.split('/')[0]
             dispatcher.send(msg + worker_ip)
         elif mtype == MessageType.REPLY:
-            server = msg[1:3]
-            frontend.send_multipart('dns-'+server, b"", msg[3:])
+            dest = request[2]
+            logger.debug("Forwarding reply to {0}".format(dest))
+            frontend.send_multipart(dest, b"", msg[1:])
         else:
-            print "Unknown message type:", mtype
+            logger.critical("Unknown message type:" + str(mtype))
 
     ###########################################################################
 
     if frontend in sockets:
-	logger.debug("frontend got somethin!")
+
         client, msg = frontend.recv_multipart()
-	logger.debug("From DNS: client={0}, msg={1}".format(str(client), str(msg)))
+        logger.debug("From DNS: client={0}, msg={1}".format(str(client), str(msg)))
         worker, request = msg.split('|')
-	worker = worker + "/send"
+        worker = worker + "/jobs"
         backend.send_multipart([worker, "", client, "", request])
         if not workers:
             poller.unregister(frontend)
-
 
     ###########################################################################
 

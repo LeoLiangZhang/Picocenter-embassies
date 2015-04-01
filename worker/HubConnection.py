@@ -29,13 +29,15 @@ class HubConnection(object):
 
     def do_job(self, msg):
         """
-        Parses args out of any incoming message, 
+        Parses args out of any incoming message,
         then passes these to the the right worker function.
         """
 	logger.debug("Recieved job request")
         empty, address, empty, request = msg
-        args = msgpack.unpackb(request[1:])
-        
+        logger.debug("Request: " + str(request))
+        args = msgpack.unpackb(request)
+        logger.debug("Args: " + str(args))
+
         # Liang: I'm not sure if this is the right way to get the type of the request
         #if request[0] == MessageType.PICO_EXEC
         #    result = self.worker.pico_exec(*args)
@@ -44,13 +46,13 @@ class HubConnection(object):
         #else: # TODO: fill in more methods here ...
         #    raise AttributeError('Unknown command')
 
-        server = address.split('-')[1].zfill(2)
-        reply = MessageType.REPLY + server + msgpack.packb(result)
-        self.job_stream.send_multipart([b"", address, b"", reply])
+        reply = MessageType.REPLY + msgpack.packb(True)
+        logger.debug("Reply: " + str(reply))
+        self.job_stream.send_multipart(["", reply, address])
 
     def heartbeat(self):
         """
-        Sends out a heartbeat to the hub. 
+        Sends out a heartbeat to the hub.
         Note: The function is called by the heartbeat_timer.
         """
 	logger.debug("Sending heartbeat...")
@@ -112,7 +114,7 @@ class HubConnection(object):
             [-1] error (not connected to hub)
         """
 
-    # set alarm 
+    # set alarm
     # need to look up public_ips
 	logger.debug("Hub connect")
         endpoint = "tcp://" + self.hub_ip + ':' + self.hub_port
@@ -148,7 +150,7 @@ class HubConnection(object):
         Call this method when the worker is ready to receive jobs.
         """
 	logger.debug("Hub start")
-        # we do handshake in synchronize 
+        # we do handshake in synchronize
         if not self.do_handshake():
 	    logger.debug("\tHandshake failed...")
             return -1
@@ -162,8 +164,8 @@ class HubConnection(object):
         Setup instance variables from config dictionary
         """
 	logger.debug("Initiating hub connection instance...")
-        # liang: I prefer writing down all available options, because in this 
-        # dynamic style, reviewer has to dig into the code to figure out all 
+        # liang: I prefer writing down all available options, because in this
+        # dynamic style, reviewer has to dig into the code to figure out all
         # configurable options.
         # TODO: revisit the design here
         for option in self.defaults:
