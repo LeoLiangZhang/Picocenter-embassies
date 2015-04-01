@@ -7,6 +7,9 @@ import zmq
 import msgpack
 from PicoManager import PicoManager
 
+import config
+logger = config.logger
+
 ################################################################################
 
 RECORD_TTL = 0
@@ -32,18 +35,23 @@ class AddrMap(object):
 class HubResolver(object):
 
     def resolve_hostname(self, hostname):
+	logger.debug("recieved request for {0}".format(hostname))
         query = ("SELECT %s FROM %s WHERE hostname='%s'" %
             (PICO_FIELDS, PICOPROCESS_TABLE, hostname))
         cursor = self.db.cursor()
         cursor.execute(query)
         result = cursor.fetchone()
         if result:
+	    logger.debug("found hostname in our database!")
             pico = Picoprocess(result)
             if pico.hot:
+		logger.debug("pico is hot")
                 return pico.public_ip
             else:
+		logger.debug("pico is cold, starting it up...")
                 self.pico_manager.run_picoprocess(pico)
                 return pico.public_ip
+	logger.debug("could not find hostname in our database...")
         return None
 
     def query(self, query, timeout=None):
@@ -51,7 +59,7 @@ class HubResolver(object):
         Lookup the hostname in our database. If we manage it, make sure it's running,
         then return its public IP address, otherwise fail.
         """
-
+	logger.debug("recieved query: {0}".format(str(query)))
         if query.type == dns.A:
             name = query.name.name
             ip = self.resolve_hostname(name)
@@ -67,18 +75,22 @@ class HubResolver(object):
 
     def lookupAllRecords(self, name, timeout=None):
         # TODO
+	logger.debug("dns: lookupallrecords({0},{1})".format(name,timeout))
         return None
 
     def __init__(self, dbpasswd, id):
         self.db = MySQLdb.connect(host='localhost',user='root',passwd=dbpasswd,db='picocenter')
         self.db.autocommit(True)
+	logger.debug("connected to database")
 
         socket = zmq.Context().socket(zmq.DEALER)
         socket.identity = 'dns-' + str(id).zfill(2)
         socket.connect('ipc://frontend.ipc')
         self.socket = socket
+	logger.debug("connected to heart on frontend socket")
 
         self.pico_manager = PicoManager(self.db, self.socket)
+	logger.debug("created picomanager")
 
 ################################################################################
 

@@ -9,17 +9,18 @@ from multiprocessing import Process
 import msgpack
 import MySQLdb
 
-
 PICOPROCESS_TABLE = 'picos'
 WORKER_TABLE = 'workers'
 ADDR_TABLE = 'addrmap'
 META_TABLE = 'meta'
 
+import config
+logger = config.logger
 ################################################################################
 
 def db_manager_process():
 
-    db = MySQLdb.connect(host='localhost',user='root',passwd='root',db='picocenter')
+    db = MySQLdb.connect(host='localhost',user='root',passwd='pewee2brandy',db='picocenter')
     db.autocommit(True)
     cursor = db.cursor()
 
@@ -59,10 +60,10 @@ heartbeats = {}
 heartbeat_timeout = 5.0
 
 def monitor_heartbeats():
-    monitor_socket = zmq.Context().socket(zmq.DEALER())
+    monitor_socket = zmq.Context().socket(zmq.DEALER)
     monitor_socket.connect('ipc://db.ipc')
-
     while True:
+    	logger.debug("Monitoring heartbeats... (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
@@ -98,24 +99,29 @@ poller = zmq.Poller()
 poller.register(backend, zmq.POLLIN)
 workers = []
 
+logger.debug("Start loop...")
 while True:
+    logger.debug("Start poll...")
     sockets = dict(poller.poll())
+    logger.debug("Poll returned")
 
     ###########################################################################
 
     if backend in sockets:
 
         request = backend.recv_multipart()
-        worker, empty, msg = request[:3]
+	logger.debug(str(request))
+        worker, msg = request[:2]
         mtype = msg[0]
 
         if mtype == MessageType.HELLO:
             if not workers:
                 poller.register(frontend, zmq.POLLIN)
-            new_worker(msg[1:])
-            workers.append(worker.split('/')[0])
+            #new_worker(msg[1:])
+	    worker_ip = worker.split('/')[0]
+            workers.append(worker_ip)
             heartbeats[worker_ip] = 0
-        if mtype == MessageType.HEARTBEAT:
+        elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
             heartbeats[worker_ip] = 1
         elif mtype == MessageType.PICO_RELEASE or mtype == MessageType.PICO_KILL:
@@ -132,9 +138,12 @@ while True:
     ###########################################################################
 
     if frontend in sockets:
+	logger.debug("frontend got somethin!")
         client, msg = frontend.recv_multipart()
+	logger.debug("From DNS: client={0}, msg={1}".format(str(client), str(msg)))
         worker, request = msg.split('|')
-        backend.send_multipart([worker, b"", client, b"", request])
+	worker = worker + "/send"
+        backend.send_multipart([worker, "", client, "", request])
         if not workers:
             poller.unregister(frontend)
 

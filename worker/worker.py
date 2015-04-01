@@ -13,6 +13,8 @@ import boto, boto.utils
 import config, iptables
 logger = config.logger
 
+from HubConnection import HubConnection
+
 ######################
 ## Helper functions ##
 ######################
@@ -525,6 +527,10 @@ class Worker:
         self.picoman = PicoManager(config, self.pico_exit_callback)
         self.s3man = S3Manager(config)
         self.portmapper = PortMapper(self.picoman)
+	self.hub = None
+
+    def set_hub(self, hub):
+	self.hub = hub
 
     def pico_exit_callback(self, pico):
         self.picoman.release(pico.pico_id)
@@ -633,7 +639,6 @@ class Worker:
 def main_event_loop():
     _config = config.WorkerConfig()
     logger.debug(_config)
-
     import zmq, zmq.eventloop
     ioloop = zmq.eventloop.ioloop
     loop = ioloop.ZMQIOLoop()
@@ -645,11 +650,22 @@ def main_event_loop():
         logger.critical('Receive SIGINT. Stopping...')
         loop.stop()
     signal.signal(signal.SIGINT, sigint_handler)
+    
+    child_terminated = False
+    def handle_signal(sig, frame):
+        global child_terminated
+        child_terminated = True
+    signal.signal(signal.SIGCHLD, handle_signal)
 
     import interface
 
     worker = Worker(_config)
     worker.start()
+
+    hub = HubConnection(loop, worker)
+    worker.set_hub(hub)
+    hub.connect()
+    hub.start()
 
     # proto must be in captital letters
     # worker.pico_exec(5, '10.2.0.5', '192.168.1.50:4040.TCP=10.2.0.5:8080', False)

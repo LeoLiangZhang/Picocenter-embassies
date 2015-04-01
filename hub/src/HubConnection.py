@@ -24,7 +24,7 @@ class WorkerStatus:
 class HubConnection(object):
 
     defaults = {
-        'heartbeat_interval' : 3000.0
+        'heartbeat_interval' : 1.0
     }
 
     def do_job(self, msg):
@@ -82,7 +82,7 @@ class HubConnection(object):
         Used on startup to inform hub of which ips this worker manages, and
         which ip/port combination (haddr) can be used to contact it
         """
-	# assert send socket already connected
+
         hello = {
             'status' : self.worker_status,
             'haddr' : self.heart_ip + ':' + self.heart_port,
@@ -91,11 +91,9 @@ class HubConnection(object):
         msg = MessageType.HELLO + msgpack.packb(hello)
 	logger.debug("Initiating handshake...")
         self.send_socket.send(msg)
-	logger.debug("SENT")
-        #reply = self.send_socket.recv()
-	#logger.debug("Recieved reply " + str(reply))
-        #return reply == "OK"
-	return True
+        reply = self.send_socket.recv()
+	logger.debug("Recieved reply " + str(reply))
+        return reply == "OK"
 
     def connect(self):
         """
@@ -117,21 +115,19 @@ class HubConnection(object):
 	logger.debug("Hub connect")
         endpoint = "tcp://" + self.hub_ip + ':' + self.hub_port
 
-	context = zmq.Context.instance()
-
-        self.send_socket = context.socket(zmq.DEALER)
+        self.send_socket = zmq.Context().socket(zmq.DEALER)
         self.send_socket.identity = self.heart_ip + '/send'
         self.send_socket.connect(endpoint)
 	logger.debug("Send socket connected")
 
-        self.job_socket = context.socket(zmq.DEALER)
+        self.job_socket = zmq.Context().socket(zmq.DEALER)
         self.job_socket.identity = self.heart_ip + '/jobs'
         self.job_socket.connect(endpoint)
         self.job_stream = ZMQStream(self.job_socket)
         self.job_stream.on_recv(self.do_job)
 	logger.debug("Job socket connected")
 
-        self.heart_socket = context.socket(zmq.DEALER)
+        self.heart_socket = zmq.Context().socket(zmq.DEALER)
         self.heart_socket.identity = self.heart_ip + '/heart'
         self.heart_socket.connect(endpoint)
         self.heart_stream = ZMQStream(self.heart_socket)
@@ -149,7 +145,7 @@ class HubConnection(object):
         """
 	logger.debug("Hub start")
         # we do handshake in synchronize 
-        if not self.do_handshake():
+        if not self.do_handshake(self.send_socket):
 	    logger.debug("\tHandshake failed...")
             return -1
 	logger.debug("Handshake successful!")
@@ -166,8 +162,8 @@ class HubConnection(object):
         # dynamic style, reviewer has to dig into the code to figure out all 
         # configurable options.
         # TODO: revisit the design here
-        for option in self.defaults:
-            setattr(self, option, self.defaults[option])
+        for option in defaults:
+            setattr(self, option, defaults[option])
         for option in kwargs:
             setattr(self, option, kwargs[option])
 
@@ -180,13 +176,10 @@ class HubConnection(object):
         self.job_socket = None
         self.job_stream = None
         self.heart_socket = None
-        self.heart_stream = None
+        self.heart.stream = None
 	# TEMP
-	self.hub_ip = '0.0.0.0'
-	self.hub_port = '9997'
-	self.heart_ip = '1.2.3.4'
-	self.heart_port = '5678'
-	self.public_ips = ['1.2.3.4','1.2.3.5']
+	self.hub_ip = '127.0.0.1'
+	self.hub_port = '4053'
 
     # The following could be used in the future to easily create rpc functions on the fly
     # without defining them or their arguments beforehand
