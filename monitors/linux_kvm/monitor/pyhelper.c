@@ -46,9 +46,9 @@ void py_serve_uvmem_page(struct uvmem_server_arg *sarg)
 	serve_uvmem_page_sarg = *sarg;
 	Py_Initialize();
 	Py_InitModule("emb", EmbMethods);
-	const char *filename = "/elasticity/embassies/monitors/linux_kvm/scripts/kvm_monitor_uvmem_helper.py";
+	const char *filename = "/elasticity/embassies/monitors/linux_kvm/scripts/uvmem_helper.py";
 	FILE *fp = fopen(filename, "r");
 	assert(fp != NULL);
-	PyRun_SimpleFile(fp, "kvm_monitor_uvmem_helper.py");
+	PyRun_SimpleFile(fp, filename);
 	Py_Finalize();
 }
