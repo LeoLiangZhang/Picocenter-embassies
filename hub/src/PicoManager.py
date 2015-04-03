@@ -99,13 +99,16 @@ class PicoManager(object):
         self.socket.send(msg)
         logger.debug("message sent")
         reply = self.socket.recv()
-        logger.debug("message recvd: " + str(reply))
-        success = msgpack.unpackb(reply)
+        #logger.debug("message recvd: " + str(reply))
+        #success = msgpack.unpackb(reply)
+        success = reply
         if not success:
             # EMAIL CUSTOMER!
-            logger.debug("failed!")
-            return None
+            #logger.debug("failed!")
+            #return None
+            pass
         logger.debug("success!")
+	return
 
         query = ("UPDATE {0} SET hot=TRUE, worker_id='{1}', public_ip='{2}', WHERE pico_id='{3}'".format(PICO_TABLE, worker.worker_id, worker.public_ip,pico.pico_id))
         cursor = self.db.cursor()
@@ -127,3 +130,4 @@ class PicoManager(object):
     def __init__(self, db, socket):
         self.db = db
         self.socket = socket
+        # test

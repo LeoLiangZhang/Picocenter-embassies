@@ -46,9 +46,11 @@ class HubConnection(object):
         #else: # TODO: fill in more methods here ...
         #    raise AttributeError('Unknown command')
 
-        reply = MessageType.REPLY + msgpack.packb(True)
+        self.worker.pico_exec(5, '10.2.0.5', '192.168.1.50:4040.TCP=10.2.0.5:8080', False)
+	ret = 0
+        reply = MessageType.REPLY + str(ret)
         logger.debug("Reply: " + str(reply))
-        self.job_stream.send_multipart(["", reply, address])
+        self.job_stream.send_multipart([reply, address])
 
     def heartbeat(self):
         """

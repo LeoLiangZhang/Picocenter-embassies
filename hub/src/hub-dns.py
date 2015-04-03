@@ -6,6 +6,7 @@ import random
 import zmq
 import msgpack
 from PicoManager import PicoManager
+from time import sleep
 
 import config
 logger = config.logger
@@ -44,12 +45,15 @@ class HubResolver(object):
         if result:
 	    logger.debug("found hostname in our database!")
             pico = Picoprocess(result)
-            if pico.hot:
+            if pico.hot or self.HOT:
 		logger.debug("pico is hot")
+                return '10.2.0.5'
                 return pico.public_ip
             else:
 		logger.debug("pico is cold, starting it up...")
                 self.pico_manager.run_picoprocess(pico)
+                self.HOT = True
+                return '10.2.0.5'
                 return pico.public_ip
 	logger.debug("could not find hostname in our database...")
         return None
@@ -70,8 +74,7 @@ class HubResolver(object):
                     ttl=RECORD_TTL)
                 answers = [answer]
                 return defer.succeed((answers,[],[]))
-            else:
-                return defer.fail(error.DomainError())
+        return defer.fail(error.DomainError())
 
     def lookupAllRecords(self, name, timeout=None):
         # TODO
@@ -79,6 +82,7 @@ class HubResolver(object):
         return None
 
     def __init__(self, dbpasswd, id):
+        self.HOT = False
         self.db = MySQLdb.connect(host='localhost',user='root',passwd=dbpasswd,db='picocenter')
         self.db.autocommit(True)
 	logger.debug("connected to database")

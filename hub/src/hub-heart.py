@@ -1,6 +1,5 @@
 import zmq
 import sys
-from HubConnection import MessageType, WorkerStatus
 from PicoManager import PicoManager
 from random import choice
 from time import sleep
@@ -17,6 +16,19 @@ META_TABLE = 'meta'
 import config
 logger = config.logger
 
+class MessageType:
+    PICO_RELEASE = 'R'
+    PICO_KILL = 'K'
+    UPDATE_STATUS = 'S'
+    HELLO = 'H'
+    HEARTBEAT = 'B'
+    REPLY = 'Y'
+    PICO_EXEC = 'E'
+    DEAD = 'D'
+
+class WorkerStatus:
+    AVAILABLE = 1
+    OVERLOADED = 2
 ################################################################################
 
 def db_manager_process():
@@ -63,14 +75,17 @@ heartbeat_timeout = 5.0
 def monitor_heartbeats():
     monitor_socket = zmq.Context().socket(zmq.DEALER)
     monitor_socket.connect('ipc://db.ipc')
+    kill = None
     while True:
         logger.debug("Heartbeat Monitor: (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
-                del heartbeates[worker]
+                kill = worker
             else:
                 heartbeats[worker] = 0
+        if kill:
+            del heartbeats[kill]
         sleep(heartbeat_timeout)
 
 ################################################################################
@@ -110,15 +125,17 @@ while True:
 
         request = backend.recv_multipart()
 
+        logger.debug(str(request))
         worker, msg = request[:2]
         mtype = msg[0]
 
         if mtype == MessageType.HELLO:
             if not workers:
+                logger.debug("Registering frontend")
                 poller.register(frontend, zmq.POLLIN)
             worker_ip = worker.split('/')[0]
             workers = True
-            heartbeats[worker_ip] = 0
+            heartbeats[worker_ip] = 1
             logger.debug("Found new worker: {0}".format(worker_ip))
         elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
@@ -132,7 +149,7 @@ while True:
         elif mtype == MessageType.REPLY:
             dest = request[2]
             logger.debug("Forwarding reply to {0}".format(dest))
-            frontend.send_multipart(dest, b"", msg[1:])
+            frontend.send_multipart([dest, "", msg[1:]])
         else:
             logger.critical("Unknown message type:" + str(mtype))
 
