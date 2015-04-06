@@ -85,7 +85,9 @@ class PicoManager(object):
         pico.public_ip = host_ip
         pico.worker_id = worker_id
 
-        args = (pico.pico_id, pico.internal_ip, pico.ports, False)
+        public_port = random.randint(1000,65535)
+
+        args = (pico.pico_id, public_port, pico.internal_ip, pico.ports, False)
         msg = msgpack.packb(args)
         msg = heart_ip + "|" + msg
 
