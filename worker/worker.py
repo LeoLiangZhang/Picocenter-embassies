@@ -8,9 +8,18 @@ import time, subprocess, signal
 from urlparse import urlparse
 import shutil
 
+# OrderedDict
+OrderedDict = None
+try:
+    import collections
+    OrderedDict = collections.OrderedDict
+except:
+    import ordereddict
+    OrderedDict = ordereddict.OrderedDict
+
 import boto, boto.utils
 
-import config, iptables
+import config, iptables, HubConnection
 logger = config.logger
 
 ######################
@@ -525,9 +534,12 @@ class Worker:
         self.picoman = PicoManager(config, self.pico_exit_callback)
         self.s3man = S3Manager(config)
         self.portmapper = PortMapper(self.picoman)
+        self.resouceman = ResourceManager(self)
 
     def pico_exit_callback(self, pico):
-        self.picoman.release(pico.pico_id)
+        pico_id = pico.pico_id
+        self.picoman.release(pico_id)
+        self.resouceman.remove(pico_id)
 
     def port_callback(self, dip, dport, proto):
         port_key = iptables.get_port_key(dip, dport, proto)
@@ -561,6 +573,7 @@ class Worker:
         portmaps = iptables.convert_portmaps(s_portmaps)
         self.picoman.execute(pico_id, internal_ip, portmaps, resume)
         self.portmapper.add_pico(pico_id)
+        self.resouceman.make_hot(pico_id)
 
     def pico_release(self, pico_id):
         logger.info('pico_release(%s)', pico_id)
@@ -574,6 +587,7 @@ class Worker:
             self.s3man.upload(fullpaths, callback=_release)
         self.portmapper.remove_pico(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
+        self.resouceman.remove(pico_id)
 
     def pico_nap(self, pico_id):
         logger.info('pico_nap(%s)', pico_id)
@@ -581,16 +595,19 @@ class Worker:
             pass
         self.portmapper.install_log(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
+        self.resouceman.make_warm(pico_id)
         
     def pico_kill(self, pico_id):
         logger.info('pico_kill(%s)', pico_id)
         self.portmapper.remove_pico(pico_id)
         self.picoman.kill(pico_id)
+        self.resouceman.remove(pico_id)
 
     def pico_ensure_alive(self, pico_id):
         logger.info('pico_ensure_alive(%s)', pico_id)
         self.picoman.ensure_alive(pico_id)
         self.portmapper.delete_log(pico_id)
+        self.resouceman.make_hot(pico_id)
 
     def start(self):
         if self.has_started:
@@ -628,6 +645,58 @@ class Worker:
             return
         self.is_stopping = True
         self._kill_processes([self.zftp, self.coordinator])
+
+
+#################
+## ResourceMan ##
+#################
+class ResourceManager:
+    def __init__(self, worker):
+        self.worker = worker
+        self.config = worker.config
+        self.hot_picos = OrderedDict()
+        self.warm_picos = OrderedDict()
+        self.status = HubConnection.WorkerStatus.AVAILABLE
+
+    def make_hot(self, pico_id):
+        if pico_id in self.warm_picos:
+            del self.warm_picos[pico_id]
+        self.hot_picos[pico_id] = True
+        self._should_nap()
+        self._update_hub_status()
+
+    def make_warm(self, pico_id):
+        if pico_id in self.hot_picos:
+            del self.hot_picos[pico_id]
+        self.warm_picos[pico_id] = True
+
+    def remove(self, pico_id):
+        if pico_id in self.hot_picos:
+            del self.hot_picos[pico_id]
+        if pico_id in self.warm_picos:
+            del self.warm_picos[pico_id]
+
+    def _should_nap(self):
+        if len(self.hot_picos) > self.config.max_hot_pico_per_worker:
+            pico_id = self.hot_picos.popitem(last=False)[0]
+            self.worker.pico_nap(pico_id)
+
+    def _update_hub_status(self):
+        count = len(self.hot_picos) + len(self.warm_picos)
+        status = self.status
+        if count > self.config.max_pico_per_worker:
+            status = HubConnection.WorkerStatus.OVERLOADED
+            if len(self.warm_picos):
+                pico_id = self.warm_picos.popitem(last=False)[0]
+            else:
+                pico_id = self.hot_picos.popitem(last=False)[0]
+            self.worker.pico_release(pico_id)
+        else:
+            status = HubConnection.WorkerStatus.AVAILABLE
+        if self.status != status:
+            # self.worker.hub.update_worker_status(status)
+            logger.info('hub.update_worker_status(%s)', status)
+            self.status = status
 
 
 def main_event_loop():
