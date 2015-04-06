@@ -3,7 +3,7 @@ import logging, datetime
 
 EMBASSIES_ROOT = '/elasticity/embassies'
 LOGGER_NAME = 'picocenter_worker'
-IPTABLES_HELPER_PATH = os.path.join(EMBASSIES_ROOT, 'worker', 
+IPTABLES_HELPER_PATH = os.path.join(EMBASSIES_ROOT, 'worker',
                                'iptables_helper/build/iptables_helper')
 IPTABLES_ARG_LOG_PREFIX = "--log-prefix=[embassies_iptables]"
 
@@ -48,7 +48,7 @@ class ConfigBase:
     def __str__(self):
         lst = dir(self)
         result = self.__class__.__name__
-        tups = ['{0}={1}'.format(s, repr(getattr(self, s))) for s in lst 
+        tups = ['{0}={1}'.format(s, repr(getattr(self, s))) for s in lst
                 if not s.startswith('_')]
         result += '(' + ', '.join(tups) + ')'
         return result
@@ -86,3 +86,6 @@ class WorkerConfig(ConfigBase):
     log_bind_ip = '127.0.0.1'
 
     eval_tcp_port = 1234
+
+    hub_ip = '0.0.0.0'
+    hub_port = '9997'

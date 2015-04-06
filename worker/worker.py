@@ -7,6 +7,7 @@ import time, subprocess, signal
 
 from urlparse import urlparse
 import shutil
+import urllib2
 
 import boto, boto.utils
 
@@ -68,7 +69,7 @@ class ProcessBase(object):
         if self._cwd:
             ensure_dir_exit(self._cwd)
         f_stdin, f_stdout, f_stderr = open_input_output(self._cwd)
-        self._execute(self._args, 
+        self._execute(self._args,
                      stdin=f_stdin, stdout=f_stdout, stderr=f_stderr,
                      close_fds=True, cwd=self._cwd, env=self._env)
         f_stdin.close()
@@ -172,7 +173,7 @@ class S3Uploader(ProcessBase):
     '''Uploader file to S3 bucket, which can be set int the config.
 
     The uploader assume all files are in config.worker_var_dir, or its subdir.
-    For example, $worker_var_dir/pico/42/kvm.swap will save to 
+    For example, $worker_var_dir/pico/42/kvm.swap will save to
     s3://$s3_bucket/pico/42/kvm.swap.
     '''
 
@@ -194,14 +195,14 @@ class S3Manager:
         self.uploaders = {}
 
     def download(self, s3url, callback=None):
-        parsed_url = urlparse(s3url) 
+        parsed_url = urlparse(s3url)
         path = parsed_url.path
         fullpath = self.config.worker_var_dir + path
         t1 = time.time()
         def _callback(p):
             t2 = time.time()
             del self.downloaders[fetcher]
-            logger.debug('S3Fetcher(pid=%s, rc=%s, time=%s): %s saved to %s', 
+            logger.debug('S3Fetcher(pid=%s, rc=%s, time=%s): %s saved to %s',
                 fetcher.pid, fetcher.returncode, t2-t1, s3url, fullpath)
             if callback:
                 callback(fetcher)
@@ -211,7 +212,7 @@ class S3Manager:
 
     def download_sync(self, s3url, save_to_file=True):
         t1 = time.time()
-        parsed_url = urlparse(s3url) 
+        parsed_url = urlparse(s3url)
         path = parsed_url.path
         fullpath = self.config.worker_var_dir + path
         f = boto.utils.fetch_file(s3url)
@@ -231,7 +232,7 @@ class S3Manager:
         def _callback(p):
             t2 = time.time()
             del self.uploaders[uploader]
-            logger.debug('S3Uploader(pid=%s, rc=%s, time=%s): %s', 
+            logger.debug('S3Uploader(pid=%s, rc=%s, time=%s): %s',
                 uploader.pid, uploader.returncode, t2-t1, fullpaths)
             if callback:
                 callback(uploader)
@@ -317,7 +318,7 @@ class Pico:
         self.stop_callback = None
         self.checkpoint_callback = None
         # should_alive: None if not set, False if killed, True if ensure_alive
-        self.should_alive = None 
+        self.should_alive = None
 
     def execute(self):
         # if not (self.status != Pico.INIT and self.status != Pico.STOPPED):
@@ -422,7 +423,7 @@ class PicoManager:
     def release(self, pico_id):
         '''Try to release the pico.
 
-        Return False if the pico has ensure_alive flag, or True when all 
+        Return False if the pico has ensure_alive flag, or True when all
         resources are free.
         '''
         pico = self.get_pico_by_id(pico_id)
@@ -527,10 +528,17 @@ class Worker:
         self.picoman = PicoManager(config, self.pico_exit_callback)
         self.s3man = S3Manager(config)
         self.portmapper = PortMapper(self.picoman)
-	self.hub = None
+        self.hub = None
+        self.find_public_ips()
+
+    def find_public_ips(self):
+        # TODO: kind of hacky, find a local way of doing this
+        self.heart_ip = urllib2.urlopen("http://ipecho.net/plain").read()
+        # TODO: find all other IPs managed by this worker and include in self.public_ips
+        self.public_ips = [self.heart_ip]
 
     def set_hub(self, hub):
-	self.hub = hub
+        self.hub = hub
 
     def pico_exit_callback(self, pico):
         self.picoman.release(pico.pico_id)
@@ -558,7 +566,7 @@ class Worker:
             exit()
 
     def pico_exec(self, pico_id, internal_ip, s_portmaps, resume):
-        logger.info('pico_exec(%s, %s, %s, %s)', 
+        logger.info('pico_exec(%s, %s, %s, %s)',
             pico_id, internal_ip, s_portmaps, resume)
         if resume:
             s3url = 's3://{0}/pico/{1}/{2}'.format(
@@ -567,6 +575,7 @@ class Worker:
         portmaps = iptables.convert_portmaps(s_portmaps)
         self.picoman.execute(pico_id, internal_ip, portmaps, resume)
         self.portmapper.add_pico(pico_id)
+        return 0
 
     def pico_release(self, pico_id):
         logger.info('pico_release(%s)', pico_id)
@@ -587,7 +596,7 @@ class Worker:
             pass
         self.portmapper.install_log(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
-        
+
     def pico_kill(self, pico_id):
         logger.info('pico_kill(%s)', pico_id)
         self.portmapper.remove_pico(pico_id)
@@ -643,14 +652,14 @@ def main_event_loop():
     ioloop = zmq.eventloop.ioloop
     loop = ioloop.ZMQIOLoop()
     loop.install()
-    
+
     # iptables.dnat('192.168.1.50', 8080, 'tcp', '10.2.0.5', 8080)
     # iptables.log('192.168.1.50', 8080, 'tcp')
     def sigint_handler(sig, frame):
         logger.critical('Receive SIGINT. Stopping...')
         loop.stop()
     signal.signal(signal.SIGINT, sigint_handler)
-    
+
     child_terminated = False
     def handle_signal(sig, frame):
         global child_terminated

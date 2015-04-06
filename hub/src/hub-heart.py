@@ -7,6 +7,7 @@ from threading import Thread
 from multiprocessing import Process
 import msgpack
 import MySQLdb
+import signal
 
 PICOPROCESS_TABLE = 'picos'
 WORKER_TABLE = 'workers'
@@ -29,6 +30,7 @@ class MessageType:
 class WorkerStatus:
     AVAILABLE = 1
     OVERLOADED = 2
+
 ################################################################################
 
 def db_manager_process():
@@ -44,14 +46,20 @@ def db_manager_process():
     picomanager = PicoManager(db, router)
 
     while True:
-        msg = router.recv()
 
+        msg = router.recv()
         mtype = msg[0]
+
+        to_log = None
+        query = None
+
         if mtype == MessageType.PICO_RELEASE:
             pico_id = msg[1:]
+            to_log = "released pico {0}".format(pico_id)
             query = ("UPDATE {0} SET hot=FALSE, worker_id=NULL, public_ip=NULL WHERE pico_id='{1}' ".format(PICOPROCESS_TABLE, pico_id))
         elif mtype == MessageType.PICO_KILL:
             pico_id = msg[1:]
+            to_log = "killed pico {0}".format(pico_id)
             query = ("DELETE FROM {0} WHERE pico_id='{1}'".format(PICOPROCESS_TABLE, pico_id))
         elif mtype == MessageType.UPDATE_STATUS:
             status = msgpack.unpackb(msg[1])
@@ -60,10 +68,35 @@ def db_manager_process():
             else:
                 status = 'overloaded'
             worker_ip = msg[2:]
+            to_log = "updated status of {0} to {1}".format(worker_ip, status)
             query = ("UPDATE {0} SET status='{1}' WHERE heart_ip='{2}'".format(WORKER_TABLE, status, worker_ip))
         elif mtype == MessageType.DEAD:
             worker_ip = msg[1:]
+            logger.debug("Worker @ {0} died".format(worker_ip))
             picomanager.migrate_picoprocesses(worker_ip)
+        elif mtype == MessageType.HELLO:
+            hello = msgpack.unpackb(msg[1:])
+
+            if hello['status'] is WorkerStatus.AVAILABLE:
+                status = "available"
+            else: # just in case, default to overloaded
+                status = "overloaded"
+
+            logger.debug("Found new {0} worker @ {1}, managing: {2}".format(status, hello['heart_ip'], hello['public_ips']))
+
+            query = "INSERT INTO workers SET status='{0}', heart_ip='{1}';".format(hello['status'], hello['heart_ip'])
+            cursor.execute(query)
+
+            query = "INSERT INTO ips (worker_id, ip) VALUES"
+            for ip in hello['public_ips']:
+                query += "(LAST_INSERT_ID(), '{0}'),".format(ip)
+            query = query[:-1]
+
+        if query:
+            cursor.execute(query)
+
+        if to_log:
+            logger.debug(to_log)
 
     cursor.close()
 
@@ -75,9 +108,9 @@ heartbeat_timeout = 5.0
 def monitor_heartbeats():
     monitor_socket = zmq.Context().socket(zmq.DEALER)
     monitor_socket.connect('ipc://db.ipc')
-    kill = None
     while True:
-        logger.debug("Heartbeat Monitor: (workers={0})".format(str(heartbeats)))
+        kill = None
+        logger.debug("heartbeat monitor: (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
@@ -101,6 +134,16 @@ db_manager.start()
 monitor = Thread(target=monitor_heartbeats)
 monitor.daemon = True
 monitor.start()
+
+def sigint_handler(sig, frame):
+    logger.critical('Receive SIGINT. Stopping...')
+    db = MySQLdb.connect(host='localhost',user='root',passwd='pewee2brandy',db='picocenter')
+    db.autocommit(True)
+    cursor = db.cursor()
+    cursor.execute("TRUNCATE ips")
+    cursor.execute("TRUNCATE workers")
+
+signal.signal(signal.SIGINT, sigint_handler)
 
 ################################################################################
 
@@ -126,21 +169,22 @@ while True:
         request = backend.recv_multipart()
 
         logger.debug(str(request))
+
         worker, msg = request[:2]
         mtype = msg[0]
 
         if mtype == MessageType.HELLO:
             if not workers:
-                logger.debug("Registering frontend")
+                logger.debug("registering frontend")
                 poller.register(frontend, zmq.POLLIN)
             worker_ip = worker.split('/')[0]
             workers = True
             heartbeats[worker_ip] = 1
-            logger.debug("Found new worker: {0}".format(worker_ip))
+            dispatcher.send(msg)
         elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
             heartbeats[worker_ip] = 1
-            logger.debug("Heartbeat recieved from {0}".format(worker_ip))
+            logger.debug("got heartbeat from {0}".format(worker_ip))
         elif mtype == MessageType.PICO_RELEASE or mtype == MessageType.PICO_KILL:
             dispatcher.send(msg)
         elif mtype == MessageType.UPDATE_STATUS:
@@ -148,21 +192,25 @@ while True:
             dispatcher.send(msg + worker_ip)
         elif mtype == MessageType.REPLY:
             dest = request[2]
-            logger.debug("Forwarding reply to {0}".format(dest))
+            logger.debug("[{0} -> {1}] forwarding".format(worker, dest))
             frontend.send_multipart([dest, "", msg[1:]])
         else:
-            logger.critical("Unknown message type:" + str(mtype))
+            logger.critical("unknown message type:" + str(mtype))
 
     ###########################################################################
 
     if frontend in sockets:
 
-        client, msg = frontend.recv_multipart()
-        logger.debug("From DNS: client={0}, msg={1}".format(str(client), str(msg)))
+        resolver, msg = frontend.recv_multipart()
         worker, request = msg.split('|')
         worker = worker + "/jobs"
-        backend.send_multipart([worker, "", client, "", request])
+
+        logger.debug("[{0} -> {1}]: {2}".format(resolver, worker, msg))
+
+        backend.send_multipart([worker, "", resolver, "", MessageType.PICO_EXEC + request])
+
         if not workers:
+            logger.debug("unregistering frontend")
             poller.unregister(frontend)
 
     ###########################################################################

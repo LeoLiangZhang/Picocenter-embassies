@@ -7,6 +7,7 @@ import zmq
 import msgpack
 from PicoManager import PicoManager
 from time import sleep
+import signal
 
 import config
 logger = config.logger
@@ -36,26 +37,25 @@ class AddrMap(object):
 class HubResolver(object):
 
     def resolve_hostname(self, hostname):
-	logger.debug("recieved request for {0}".format(hostname))
+
         query = ("SELECT %s FROM %s WHERE hostname='%s'" %
             (PICO_FIELDS, PICOPROCESS_TABLE, hostname))
         cursor = self.db.cursor()
         cursor.execute(query)
         result = cursor.fetchone()
+
         if result:
-	    logger.debug("found hostname in our database!")
             pico = Picoprocess(result)
-            if pico.hot or self.HOT:
-		logger.debug("pico is hot")
-                return '10.2.0.5'
-                return pico.public_ip
+            if pico.hot:
+                logger.info("found hot pico @ {0}".format(pico.public_ip))
+                return pico.internal_ip
             else:
-		logger.debug("pico is cold, starting it up...")
+                logger.debug("found cold pico, starting it up...")
                 self.pico_manager.run_picoprocess(pico)
-                self.HOT = True
-                return '10.2.0.5'
-                return pico.public_ip
-	logger.debug("could not find hostname in our database...")
+                logger.info("pico {0} now running on {1} (internal={2})".format(pico.pico_id, pico.public_ip, pico.internal_ip))
+                return pico.internal_ip
+
+        logger.debug("could not find {0} in our database...".format(hostname))
         return None
 
     def query(self, query, timeout=None):
@@ -63,7 +63,9 @@ class HubResolver(object):
         Lookup the hostname in our database. If we manage it, make sure it's running,
         then return its public IP address, otherwise fail.
         """
-	logger.debug("recieved query: {0}".format(str(query)))
+
+        logger.debug("recieved query: {0}".format(str(query)))
+
         if query.type == dns.A:
             name = query.name.name
             ip = self.resolve_hostname(name)
@@ -78,23 +80,20 @@ class HubResolver(object):
 
     def lookupAllRecords(self, name, timeout=None):
         # TODO
-	logger.debug("dns: lookupallrecords({0},{1})".format(name,timeout))
+        logger.debug("dns: lookupallrecords({0},{1})".format(name,timeout))
         return None
 
     def __init__(self, dbpasswd, id):
-        self.HOT = False
+
         self.db = MySQLdb.connect(host='localhost',user='root',passwd=dbpasswd,db='picocenter')
         self.db.autocommit(True)
-	logger.debug("connected to database")
 
         socket = zmq.Context().socket(zmq.DEALER)
         socket.identity = 'dns-' + str(id).zfill(2)
         socket.connect('ipc://frontend.ipc')
         self.socket = socket
-	logger.debug("connected to heart on frontend socket")
 
         self.pico_manager = PicoManager(self.db, self.socket)
-	logger.debug("created picomanager")
 
 ################################################################################
 
@@ -102,6 +101,14 @@ def main(args):
     """
     Run the server.
     """
+
+    # Need to handle sigchld to protect zmq poll from interrupted system calls
+    child_terminated = False
+    def handle_sigchld(sig, frame):
+        global child_terminated
+        child_terminated = True
+    signal.signal(signal.SIGCHLD, handle_sigchld)
+
     factory = server.DNSServerFactory(
         clients=[HubResolver(args[2], args[3]), client.Resolver(resolv='/etc/resolv.conf')]
     )
