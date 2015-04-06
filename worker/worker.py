@@ -23,8 +23,6 @@ import boto, boto.utils
 import config, iptables, HubConnection
 logger = config.logger
 
-from HubConnection import HubConnection
-
 ######################
 ## Helper functions ##
 ######################
