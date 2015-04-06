@@ -142,6 +142,7 @@ def sigint_handler(sig, frame):
     cursor = db.cursor()
     cursor.execute("TRUNCATE ips")
     cursor.execute("TRUNCATE workers")
+    cursor.execute("UPDATE picos SET hot=0")
 
 signal.signal(signal.SIGINT, sigint_handler)
 
