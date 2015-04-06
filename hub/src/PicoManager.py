@@ -2,26 +2,19 @@ import MySQLdb
 import random
 import msgpack
 
-################################################################################
-
-RECORD_TTL = 0
-PICOPROCESS_TABLE = 'picos'
-WORKER_TABLE = 'workers'
-ADDR_TABLE = 'addrmap'
-META_TABLE = 'meta'
-
-PICO_FIELDS = "pico_id,hot,worker_id,public_ip,internal_ip,ports,hostname,customer_id"
-WORKER_FIELDS = "worker_id,status,heart_ip,heart_port"
-ADDR_FIELDS = "worker_id,public_ip,ports_allocated,port_80_allocated"
-
-# True = resume, false = fresh 
+import config
+logger = config.logger
 
 ################################################################################
+
+class Picoprocess(object):
+    def __init__(self, fields):
+        self.pico_id, self.hot, self.worker_id, self.public_ip, self.internal_ip, self.ports, self.hostname, self.customer_id = fields
 
 class PicoManager(object):
 
     def get_next_internal_ip(self):
-        query = ("SELECT last_internal_ip FROM {0} ".format(META_TABLE))
+        query = "SELECT last_internal_ip FROM meta "
         cursor = self.db.cursor()
         cursor.execute(query)
         last = cursor.fetchone()[0]
@@ -31,12 +24,12 @@ class PicoManager(object):
 
         octets[3] += 1
         for i in reversed(range(1,4)):
-        if octets[i] > 255:
+            if octets[i] > 255:
                 octets[i-1] += 1
 
-        new_ip = '{0}.{1}.{2}.{3}'.format(a,b,c,d)
+        new_ip = '.'.join([str(o) for o in octets])
 
-        query ("UPDATE {0} SET last_internal_ip='{1}'".format(META_TABLE, new_ip))
+        query = "UPDATE meta SET last_internal_ip='{0}'".format(new_ip)
         cursor.execute(query)
 
         return new_ip
@@ -53,28 +46,37 @@ class PicoManager(object):
         internal_ip = self.get_next_internal_ip()
         ports = ';'.join(ports)
 
-        query = ("INSERT INTO {0} SET hot={1},worker_id='',public_ip='',internal_ip={2},ports={3},hostname={4},customer_id={5}".format(PICO_TABLE, False, internal_ip,ports,hostname,customer_id))
+        query = "INSERT INTO picos SET hot={0},internal_ip='{1}',ports='{2}',hostname='{3}',customer_id={4}".format(False, internal_ip,ports,hostname,customer_id)
         cursor.execute(query)
 
-        query ("SELECT pico_id FROM {0} WHERE internal_ip='{1}'".format(PICOPROCESS_TABLE, internal_ip))
+        query = "SELECT LAST_INSERT_ID();"
         cursor.execute(query)
         pico_id = cursor.fetchall()[0]
 
         return pico_id
 
     def find_available_worker(self, ports):
-	port_conditions = "pp.port=%s" % ports[0]
-	for port in ports[1:]:
-		port_conditions += (" OR pp.port=%s" % port)
-	query = "SELECT ip, heart_ip FROM ips i, workers w WHERE i.worker_id=w.worker_id AND status=1 AND (ip NOT IN (SELECT public_ip FROM picos p, picoports pp WHERE p.pico_id=pp.pico_id AND ({0})))".format(port_conditions)
+        ports = ports.split(";")
 
+        logger.debug("looking for ports: {0}".format(ports))
+
+        port_conditions = "pp.port=%s" % ports[0]
+        for port in ports[1:]:
+            port_conditions += (" OR pp.port=%s" % port)
+
+        query = "SELECT ip, heart_ip, w.worker_id FROM ips i, workers w WHERE i.worker_id=w.worker_id AND status=1 AND (ip NOT IN (SELECT public_ip FROM picos p, picoports pp WHERE p.pico_id=pp.pico_id AND ({0})))".format(port_conditions)
         cursor = self.db.cursor()
         cursor.execute(query)
 
-        host_ip, worker_ip = cursor.fetchone()
-	worker_identity = worker_ip + '\jobs'
+        host_ip, heart_ip, worker_id = cursor.fetchone()
+        return host_ip, heart_ip, worker_id
 
-        return host_ip, worker_identity
+    def generate_portmap(self, pico):
+        public_ip = '192.168.1.50'
+        public_port = 4040#random.randint(1000, 65535)
+        protocol = 'TCP'
+        return "{0}:{1}.{2}={3}:{4}".format(public_ip, public_port, protocol, pico.internal_ip, pico.ports.split(';')[0])
+
 
     def run_picoprocess(self, pico):
         """
@@ -83,21 +85,31 @@ class PicoManager(object):
             to DNS query
         """
 
-        worker, port_map = self.find_available_worker(pico.ports)
-        args = (pico.pico_id, pico.internal_ip, pico.port_map, 0) # 0 for no flags
+        logger.debug("PicoManager: run_picoprocess (pico={0})".format(pico.__dict__))
+        host_ip, heart_ip, worker_id  = self.find_available_worker(pico.ports)
+        logger.debug("found worker {0}".format(heart_ip))
+        portmap = self.generate_portmap(pico)
+        logger.debug("pico portmap: {0}".format(portmap))
+
+        pico.public_ip = host_ip
+        pico.worker_id = worker_id
+
+        args = (pico.pico_id, pico.internal_ip, portmap, False)
         msg = msgpack.packb(args)
+        msg = heart_ip + "|" + msg
+
         self.socket.send(msg)
-        reply = socket.recv()
-        success = msgpack.unpackb(reply)
-        if not success:
-            # EMAIL CUSTOMER!
+
+        ret = self.socket.recv()
+        logger.debug("message recvd: " + str(ret))
+        if ret:
+            # TODO email customer?
+            logger.critical("worker failed to start picoprocess!")
             return None
 
-        query = ("UPDATE {0} SET hot=TRUE, worker_id='{1}', public_ip='{2}', WHERE pico_id='{3}'".format(PICO_TABLE, worker.worker_id, worker.public_ip,pico.pico_id))
+        query = ("UPDATE picos SET hot=TRUE, worker_id='{0}', public_ip='{1}' WHERE pico_id='{2}'".format(worker_id, pico.public_ip, pico.pico_id))
         cursor = self.db.cursor()
         cursor.execute(query)
-
-        return worker.public_ip
 
     def migrate_picoprocesses(self, bad_worker):
         """
@@ -107,9 +119,24 @@ class PicoManager(object):
             are not necessarily all the same, depending on port requirements
             of each process
         """
+        logger.debug("PicoManager: migrate_picoprocesses({0})".format(bad_worker))
 
-        pass
+        cursor = self.db.cursor()
+
+        find_orphans = "SELECT * FROM picos WHERE worker_id=(SELECT worker_id FROM workers WHERE heart_ip='{0}')".format(bad_worker)
+        cursor.execute(find_orphans)
+        orphans = cursor.fetchall()
+
+        logger.debug("Found {0} orphans, relocating...".format(len(orphans)))
+
+        for orphan in orphans:
+            self.run_picoprocess(Picoprocess(orphan))
+
+        remove_worker = "DELETE FROM ips,workers USING workers INNER JOIN ips WHERE ip='{0}'".format(bad_worker)
+        cursor.execute(remove_worker)
+
 
     def __init__(self, db, socket):
         self.db = db
         self.socket = socket
+        # test
