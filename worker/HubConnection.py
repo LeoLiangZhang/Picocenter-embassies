@@ -45,7 +45,7 @@ class HubConnection(object):
             logger.debug("[HUB] -> worker :: pico_exec({0})".format(args))
             pico_id, internal_ip, ports, flags = args
             public_port = random.randint(1000,65535)
-            portmap = "{0}:{1}.{2}={3}:{4}".format(self.worker.heart_ip, public_port, "TCP", internal_ip, ports.split(';')[0])
+            portmap = "{0}:{1}.{2}={3}:{4}".format(self.worker.config.eth0addr, public_port, "TCP", internal_ip, ports.split(';')[0])
             ret = self.worker.pico_exec(pico_id, internal_ip, portmap, flags)
         elif mtype == MessageType.PICO_RELEASE:
             logger.debug("[HUB] -> worker :: pico_release({0})".format(args))

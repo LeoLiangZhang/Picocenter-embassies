@@ -92,3 +92,5 @@ class WorkerConfig(ConfigBase):
 
     hub_ip = '0.0.0.0'
     hub_port = '9997'
+
+    eth0addr = '10.0.0.3'
