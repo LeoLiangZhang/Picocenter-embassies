@@ -740,7 +740,7 @@ def main_event_loop():
     worker = Worker(_config)
     worker.start()
 
-    hub = HubConnection(loop, worker)
+    hub = HubConnection.HubConnection(loop, worker)
     worker.set_hub(hub)
     hub.connect()
     hub.start()
