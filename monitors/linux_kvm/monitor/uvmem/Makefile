@@ -18,12 +18,12 @@ build : uvmem.ko
 
 insmod : uvmem.ko
 	sudo insmod uvmem.ko
+	sleep 1
+	sudo chown `id -u` /dev/uvmem
+	chmod g+rw /dev/uvmem
 
 rmmod :
 	sudo rmmod uvmem
-
-chown :
-	sudo chown `id -u` /dev/uvmem
 
 all : build
 .PHONY : all clean build rmmod chown insmod

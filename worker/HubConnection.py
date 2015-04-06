@@ -148,7 +148,7 @@ class HubConnection(object):
         self.job_socket.identity = self.worker.heart_ip + '/jobs'
         self.job_socket.connect(endpoint)
         self.job_stream = ZMQStream(self.job_socket)
-        self.job_stream.on_recv(self.poll_hub)
+        # self.job_stream.on_recv(self.poll_hub)
 
         self.heart_socket = context.socket(zmq.DEALER)
         self.heart_socket.identity = self.worker.heart_ip + '/heart'

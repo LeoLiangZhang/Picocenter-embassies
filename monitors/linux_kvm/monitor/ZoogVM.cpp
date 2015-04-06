@@ -1191,6 +1191,7 @@ void init_uvmem(ZoogVM *zvm, FILE *fp, uint32_t last_guest_range_end)
 		close(zvm->get_kvmfd());
 		close(zvm->get_vmfd());
 		prctl(PR_SET_PDEATHSIG, SIGKILL); // kill child when parent exits
+		signal(SIGUSR2, SIG_DFL);
 
 		struct uvmem_server_arg sarg;
 		sarg.fp = fp;

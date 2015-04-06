@@ -40,10 +40,10 @@ schroot -- bash -c "cd /elasticity/embassies/ && ZOOG_TUNID=2 ./monitors/linux_k
 
 **Recently updated options for the monitor**
 
-ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file nginx2.kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume 
+ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume 
 
 ** on Ravello **
-ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file pico-42.kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume
+ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.nginx.signed --wait-for-core false --swap-file kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume
 
 
 ## Checkpointing
@@ -85,6 +85,19 @@ iptables -A FORWARD -t filter -i eth0 -m state --state ESTABLISHED,RELATED -j AC
 
 Assuming root privilege, eth0 is the Internet interface and Tun is working on 10.2.0.0/16.
 
+# profile
+
+works in pico/<pico_id>/ folder
+
+s3put -b elasticity-storage -p /elasticity/embassies/var/worker/ kvm.swap kvm.swap.page
+
+python -m line_profiler kvm_monitor_uvmem_helper.lprof > profile.s3.txt
+
+ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_monitor --image-file /elasticity/embassies/toolchains/linux_elf/elf_loader/build/elf_loader.lion.signed --wait-for-core false --swap-file kvm.swap --assign-in-address 10.2.0.5 --pico-id 42 --resume
+
+ln -s /elasticity/embassies/monitors/linux_kvm/scripts/kvm_monitor_uvmem_helper.py .
+
+
 # Config related files
 
 coreswap.h - My resume structure
@@ -102,6 +115,7 @@ Install these in schroot with pip, e.g., sudo pip install ...
 * tornado (v4.1) - use IOLoop and its async framework
 
 sudo pip install ordereddict boto pyzmq tornado
+sudo pip install line_profiler
 
 ## System
 
@@ -109,6 +123,11 @@ Install in schroot.
 
 net-tools - ifconfig utils
 procps - ps pgrep pkill etc.
+
+/etc/apt/sources.list
+deb http://ftp.debian.org/debian squeeze non-free
+
+sudo apt-get install python-profiler
 
 schroot -- sudo apt-get install python2.6-dev iptables curl python-pip net-tools procps
 
