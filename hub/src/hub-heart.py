@@ -110,7 +110,7 @@ def monitor_heartbeats():
     monitor_socket.connect('ipc://db.ipc')
     while True:
         kill = None
-        logger.debug("heartbeat monitor: (workers={0})".format(str(heartbeats)))
+        # logger.debug("heartbeat monitor: (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
@@ -168,8 +168,6 @@ while True:
     if backend in sockets:
 
         request = backend.recv_multipart()
-
-        logger.debug(str(request))
 
         worker, msg = request[:2]
         mtype = msg[0]
