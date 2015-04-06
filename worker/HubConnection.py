@@ -64,8 +64,6 @@ class HubConnection(object):
         Note: The function is called by the heartbeat_timer.
         """
 
-        logger.debug("[WORKER] -> hub :: heartbeat")
-
         beat = MessageType.HEARTBEAT
         self.heart_stream.send(beat)
 

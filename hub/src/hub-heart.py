@@ -185,7 +185,6 @@ while True:
         elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
             heartbeats[worker_ip] = 1
-            logger.debug("got heartbeat from {0}".format(worker_ip))
         elif mtype == MessageType.PICO_RELEASE or mtype == MessageType.PICO_KILL:
             dispatcher.send(msg)
         elif mtype == MessageType.UPDATE_STATUS:
