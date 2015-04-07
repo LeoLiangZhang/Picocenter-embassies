@@ -23,8 +23,6 @@ import boto, boto.utils
 import config, iptables, HubConnection
 logger = config.logger
 
-from HubConnection import HubConnection
-
 ######################
 ## Helper functions ##
 ######################
@@ -716,6 +714,7 @@ class ResourceManager:
 
 def main_event_loop():
     _config = config.WorkerConfig()
+    _config.load_args()
     logger.debug(_config)
     import zmq, zmq.eventloop
     ioloop = zmq.eventloop.ioloop
@@ -729,18 +728,15 @@ def main_event_loop():
         worker.stop()
     signal.signal(signal.SIGINT, sigint_handler)
 
-    # child_terminated = False
-    # def handle_signal(sig, frame):
-    #     global child_terminated
-    #     child_terminated = True
-    # signal.signal(signal.SIGCHLD, handle_signal)
-
     import interface
 
     worker = Worker(_config)
     worker.start()
 
-    hub = HubConnection.HubConnection(loop, worker)
+    HubConnectionClass = HubConnection.HubConnection
+    if _config.local_run:
+        HubConnectionClass = HubConnection.MockHubConnection
+    hub = HubConnectionClass(loop, worker)
     worker.set_hub(hub)
     hub.connect()
     hub.start()

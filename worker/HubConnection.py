@@ -22,6 +22,16 @@ class WorkerStatus:
     AVAILABLE = 1
     OVERLOADED = 2
 
+class MockHubConnection:
+    def __init__(self, *args, **kwargs):
+        pass
+    def connect(self, *args, **kwargs):
+        pass
+    def start(self, *args, **kwargs):
+        pass
+    def update_worker_status(self, *args, **kwargs):
+        pass
+
 class HubConnection(object):
 
     defaults = {

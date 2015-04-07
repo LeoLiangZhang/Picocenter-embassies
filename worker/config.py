@@ -53,6 +53,23 @@ class ConfigBase:
         result += '(' + ', '.join(tups) + ')'
         return result
 
+    def load_args(self, args=None):
+        if args is None:
+            args = sys.argv
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg.startswith('--'):
+                opt = arg[2:].replace('-', '_')
+                i += 1
+                arg = args[i]
+                val = arg
+                if hasattr(self, opt):
+                    default = getattr(self, opt)
+                    t = type(default)
+                    val = t(arg)
+                setattr(self, opt, val)
+            i += 1
 
 class WorkerConfig(ConfigBase):
     '''The type for all item value is str.
@@ -92,3 +109,14 @@ class WorkerConfig(ConfigBase):
 
     hub_ip = '0.0.0.0'
     hub_port = '9997'
+
+    local_run = False
+
+def main():
+    # args = ['--local-run', 'true']
+    config = WorkerConfig()
+    config.load_args()
+    print config
+
+if __name__ == '__main__':
+    main()
