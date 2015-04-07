@@ -111,6 +111,7 @@ class WorkerConfig(ConfigBase):
     hub_port = '9997'
 
     local_run = False
+    eth0addr = '10.0.0.3'
 
 def main():
     # args = ['--local-run', 'true']

@@ -48,12 +48,12 @@ class HubResolver(object):
             pico = Picoprocess(result)
             if pico.hot:
                 logger.info("found hot pico @ {0}".format(pico.public_ip))
-                return pico.internal_ip
+                return pico.public_ip
             else:
                 logger.debug("found cold pico, starting it up...")
                 self.pico_manager.run_picoprocess(pico)
                 logger.info("pico {0} now running on {1} (internal={2})".format(pico.pico_id, pico.public_ip, pico.internal_ip))
-                return pico.internal_ip
+                return pico.public_ip
 
         logger.debug("could not find {0} in our database...".format(hostname))
         return None

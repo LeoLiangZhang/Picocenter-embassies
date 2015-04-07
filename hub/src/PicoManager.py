@@ -71,13 +71,6 @@ class PicoManager(object):
         host_ip, heart_ip, worker_id = cursor.fetchone()
         return host_ip, heart_ip, worker_id
 
-    def generate_portmap(self, pico):
-        public_ip = '192.168.1.50'
-        public_port = 4040#random.randint(1000, 65535)
-        protocol = 'TCP'
-        return "{0}:{1}.{2}={3}:{4}".format(public_ip, public_port, protocol, pico.internal_ip, pico.ports.split(';')[0])
-
-
     def run_picoprocess(self, pico):
         """
         Called by DNS Resolver when it reiceves a request for a cold process.
@@ -88,13 +81,13 @@ class PicoManager(object):
         logger.debug("PicoManager: run_picoprocess (pico={0})".format(pico.__dict__))
         host_ip, heart_ip, worker_id  = self.find_available_worker(pico.ports)
         logger.debug("found worker {0}".format(heart_ip))
-        portmap = self.generate_portmap(pico)
-        logger.debug("pico portmap: {0}".format(portmap))
 
         pico.public_ip = host_ip
         pico.worker_id = worker_id
 
-        args = (pico.pico_id, pico.internal_ip, portmap, False)
+        public_port = random.randint(1000,65535)
+
+        args = (pico.pico_id, public_port, pico.internal_ip, pico.ports, False)
         msg = msgpack.packb(args)
         msg = heart_ip + "|" + msg
 

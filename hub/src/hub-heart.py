@@ -110,7 +110,7 @@ def monitor_heartbeats():
     monitor_socket.connect('ipc://db.ipc')
     while True:
         kill = None
-        logger.debug("heartbeat monitor: (workers={0})".format(str(heartbeats)))
+        # logger.debug("heartbeat monitor: (workers={0})".format(str(heartbeats)))
         for worker in heartbeats:
             if heartbeats[worker] == 0:
                 monitor_socket.send(MessageType.DEAD + worker)
@@ -142,6 +142,7 @@ def sigint_handler(sig, frame):
     cursor = db.cursor()
     cursor.execute("TRUNCATE ips")
     cursor.execute("TRUNCATE workers")
+    cursor.execute("UPDATE picos SET hot=0")
 
 signal.signal(signal.SIGINT, sigint_handler)
 
@@ -168,8 +169,6 @@ while True:
 
         request = backend.recv_multipart()
 
-        logger.debug(str(request))
-
         worker, msg = request[:2]
         mtype = msg[0]
 
@@ -184,7 +183,6 @@ while True:
         elif mtype == MessageType.HEARTBEAT:
             worker_ip = worker.split('/')[0]
             heartbeats[worker_ip] = 1
-            logger.debug("got heartbeat from {0}".format(worker_ip))
         elif mtype == MessageType.PICO_RELEASE or mtype == MessageType.PICO_KILL:
             dispatcher.send(msg)
         elif mtype == MessageType.UPDATE_STATUS:

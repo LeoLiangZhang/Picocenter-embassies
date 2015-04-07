@@ -4,6 +4,7 @@ import zmq.eventloop
 from zmq.eventloop.zmqstream import ZMQStream
 import msgpack
 import urllib2
+import random
 
 import config
 logger = config.logger
@@ -52,7 +53,9 @@ class HubConnection(object):
         ret = 0
         if mtype == MessageType.PICO_EXEC:
             logger.debug("[HUB] -> worker :: pico_exec({0})".format(args))
-            ret = self.worker.pico_exec(*args)
+            pico_id, public_port, internal_ip, ports, flags = args
+            portmap = "{0}:{1}.{2}={3}:{4}".format(self.worker.config.eth0addr, public_port, "TCP", internal_ip, ports.split(';')[0])
+            ret = self.worker.pico_exec(pico_id, internal_ip, portmap, flags)
         elif mtype == MessageType.PICO_RELEASE:
             logger.debug("[HUB] -> worker :: pico_release({0})".format(args))
             ret = self.worker.pico_release(*args)
@@ -70,8 +73,6 @@ class HubConnection(object):
         Sends out a heartbeat to the hub.
         Note: The function is called by the heartbeat_timer.
         """
-
-        logger.debug("[WORKER] -> hub :: heartbeat")
 
         beat = MessageType.HEARTBEAT
         self.heart_stream.send(beat)
