@@ -20,7 +20,7 @@ except:
 
 import boto, boto.utils
 
-import config, iptables, HubConnection
+import config, iptables, hubproxy
 logger = config.logger
 
 ######################
@@ -669,7 +669,7 @@ class ResourceManager:
         self.config = worker.config
         self.hot_picos = OrderedDict()
         self.warm_picos = OrderedDict()
-        self.status = HubConnection.WorkerStatus.AVAILABLE
+        self.status = hubproxy.WorkerStatus.AVAILABLE
 
     def make_hot(self, pico_id):
         if pico_id in self.warm_picos:
@@ -698,14 +698,14 @@ class ResourceManager:
         count = len(self.hot_picos) + len(self.warm_picos)
         status = self.status
         if count > self.config.max_pico_per_worker:
-            status = HubConnection.WorkerStatus.OVERLOADED
+            status = hubproxy.WorkerStatus.OVERLOADED
             if len(self.warm_picos):
                 pico_id = self.warm_picos.popitem(last=False)[0]
             else:
                 pico_id = self.hot_picos.popitem(last=False)[0]
             self.worker.pico_release(pico_id)
         else:
-            status = HubConnection.WorkerStatus.AVAILABLE
+            status = hubproxy.WorkerStatus.AVAILABLE
         if self.status != status:
             # self.worker.hub.update_worker_status(status)
             logger.info('hub.update_worker_status(%s)', status)
@@ -733,9 +733,9 @@ def main_event_loop():
     worker = Worker(_config)
     worker.start()
 
-    HubConnectionClass = HubConnection.HubConnection
+    HubConnectionClass = hubproxy.HubConnection
     if _config.local_run:
-        HubConnectionClass = HubConnection.MockHubConnection
+        HubConnectionClass = hubproxy.MockHubConnection
     hub = HubConnectionClass(loop, worker)
     worker.set_hub(hub)
     hub.connect()
