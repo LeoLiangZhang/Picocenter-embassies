@@ -707,7 +707,7 @@ class ResourceManager:
         else:
             status = hubproxy.WorkerStatus.AVAILABLE
         if self.status != status:
-            # self.worker.hub.update_worker_status(status)
+            self.worker.hub.update_worker_status(status)
             logger.info('hub.update_worker_status(%s)', status)
             self.status = status
 
