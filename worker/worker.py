@@ -704,7 +704,7 @@ class ResourceManager:
             else:
                 pico_id = self.hot_picos.popitem(last=False)[0]
             self.worker.pico_release(pico_id)
-        else:
+        elif count < self.config.worker_available_threshold:
             status = hubproxy.WorkerStatus.AVAILABLE
         if self.status != status:
             self.worker.hub.update_worker_status(status)
