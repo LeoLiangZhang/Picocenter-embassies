@@ -100,6 +100,7 @@ class WorkerConfig(ConfigBase):
     s3_bucket = 'elasticity-storage'
 
     max_pico_per_worker = 4
+    worker_available_threshold = 3
     max_hot_pico_per_worker = 2
 
     log_udp_port = 12345
