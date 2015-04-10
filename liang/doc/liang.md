@@ -98,6 +98,10 @@ ZOOG_TUNID=2 /elasticity/embassies/monitors/linux_kvm/monitor/build/zoog_kvm_mon
 ln -s /elasticity/embassies/monitors/linux_kvm/scripts/kvm_monitor_uvmem_helper.py .
 
 
+# Worker commander
+worker.pico_exec(5, '10.2.0.5', '192.168.1.50:8080.TCP=10.2.0.5:8080', False)
+worker.pico_exec(6, '10.2.0.6', '192.168.1.50:8081.TCP=10.2.0.6:8080', False)
+
 # Config related files
 
 coreswap.h - My resume structure

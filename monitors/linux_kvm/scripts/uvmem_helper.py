@@ -23,6 +23,9 @@ S3_BUCKET_NAME = 'elasticity-storage'
 PICO_SWAP_FILE_FMT = '/pico/{pico_id}/kvm.swap.page'
 PAGE_MULTIPLIER = 32 # block_size = page_size * multiplier
 CACHE_CAPACITY = 40 # LRUCache capacity
+PREEMPTIVE_FETCHING = True
+PREEMPTIVE_FETCHING_SIZE = 256
+PREEMPTIVE_FETCHING_FILENAME = 'precache.list'
 
 LOGGER_NAME = 'uvmem_page_server'
 LOGGER_FORMAT = '%(asctime)s - %(levelname)s - %(message)s'
@@ -103,6 +106,9 @@ class LRUCache:
         self.capacity = capacity
         self.cache = OrderedDict()
 
+    def exists(self, key):
+        return key in self.cache
+
     def get(self, key):
         try:
             value = self.cache.pop(key)
@@ -139,7 +145,8 @@ class FilePageLoader(object):
 
 
 class S3PageLoader(object):
-    def __init__(self):
+    def __init__(self, page_multiplier=PAGE_MULTIPLIER,
+                       cache_capacity=CACHE_CAPACITY):
         conn = boto.connect_s3()
         bucket_ckpt = conn.get_bucket(S3_BUCKET_NAME)
         filename = PICO_SWAP_FILE_FMT.format(pico_id=pico_id)
@@ -148,8 +155,8 @@ class S3PageLoader(object):
         self.conn = conn
         self.bucket_ckpt = bucket_ckpt
         self.key_page = key_page
-        self.block_size = int(page_size) * PAGE_MULTIPLIER # 1M
-        self.block_cache = LRUCache(CACHE_CAPACITY) #  cached at most 10M
+        self.block_size = int(page_size) * page_multiplier
+        self.block_cache = LRUCache(cache_capacity)
 
     def get_block(self, block_num):
         logger.debug("get_block(block=%d)", block_num)
@@ -173,7 +180,14 @@ class S3PageLoader(object):
         block_num = int(page_file_offset) / self.block_size
         block_offset = int(page_file_offset) % self.block_size
         data = self.get_block(block_num)
+        if self.block_size == page_size: 
+            # optimize page-size block, reduce copy overhead
+            return data 
         return data[block_offset:block_offset+page_size]
+
+    def exists(self, page_file_offset):
+        block_num = int(page_file_offset) / self.block_size
+        return self.block_cache.exists(block_num)
 
     def load(self, page_file_offset):
         # range_str = '{0}-{1}'.format(page_file_offset, page_file_offset+page_size-1)
@@ -181,8 +195,47 @@ class S3PageLoader(object):
         page_data = self.get_page_data(page_file_offset)
         return page_data
 
+class PreemptiveCache:
+    def __init__(self, size=PREEMPTIVE_FETCHING_SIZE,
+                 filename=PREEMPTIVE_FETCHING_FILENAME):
+        self.size = size
+        self.cache = S3PageLoader(page_multiplier=1, cache_capacity=size)
+        self.request_queue = []
+        self.has_saved = False
+        self.filename = filename
 
-def serve_pages(loader):
+    def prefetch(self):
+        if os.path.exists(self.filename):
+            logger.debug('PreemptiveCache.prefetch(%s): begin', self.filename)
+            with open(self.filename) as f:
+                data = f.read()
+                lst = map(int, data.split(','))
+                for page_file_offset in lst:
+                    self.cache.load(page_file_offset)
+                logger.debug('PreemptiveCache.prefetch(%s): loaded %s pages',
+                    self.filename, len(lst))
+        else:
+            logger.debug('PreemptiveCache.prefetch fail: %s file not found.',
+                         self.filename)
+
+    def load(self, page_file_offset):
+        ''' Return data if the page is in pre-cache, otherwise return None.
+        '''
+        if len(self.request_queue) < self.size:
+            self.request_queue.append(page_file_offset)
+            if len(self.request_queue) == self.size:
+                with open(self.filename, 'w+') as f:
+                    f.write(','.join(map(str, self.request_queue)))
+                logger.debug('PreemptiveCache saved %s pages to %s.', 
+                             len(self.request_queue), self.filename)
+        if self.cache.exists(page_file_offset):
+            return self.cache.load(page_file_offset)
+        return None
+
+
+def serve_pages(loader, pre_cache=None):
+    ''' The main entry point of the serving process.
+    '''
     f_uvmem = io.open(uvmem_fd, 'r+b', buffering=0)
     logger.debug("Open uvmem_fd in python %s", f_uvmem)
 
@@ -193,23 +246,38 @@ def serve_pages(loader):
     n_pages = 0
     nr_pages = map_size / page_size
 
+    if pre_cache:
+        pre_cache.prefetch()
+
     accumlated_paging_time = .0
 
     while n_pages < nr_pages:
         data = f_uvmem.read(32*8)
         logger.debug('f_uvmem.read %s %s', len(data), 'bytes')
 
+        pg_set = set()
+
         i = 0
         while i < len(data):
             t1 = time.time()
             pg_data = data[i:i+8] # 8 is the size of longlong
             pg = struct.unpack('Q', pg_data)[0]
+
+            i += 8
+            if pg in pg_set:
+                continue
+            pg_set.add(pg)
+
             vaddr = pg * page_size + 0x10001000L
             page_file_offset = emb.find_page_file_offset(vaddr)
             logger.debug('find_page_file_offset(page=%s, vaddr=%s) = %s', 
                 hex(pg), hex(vaddr), page_file_offset)
 
-            page_data = loader.load(page_file_offset)
+            page_data = None
+            if pre_cache:
+                page_data = pre_cache.load(page_file_offset)
+            if page_data is None:
+                page_data = loader.load(page_file_offset)
             assert(len(page_data) == page_size)
 
             shmem_offset = pg * page_size
@@ -224,10 +292,12 @@ def serve_pages(loader):
             logger.debug('f_uvmem.write(page=%s): time=%f s, accumlated_paging_time=%f', 
                 hex(pg), ts, accumlated_paging_time)
 
-            i += 8
 
-# measure_webpage_load()
+measure_webpage_load()
 if page_fd >= 0:
     serve_pages(FilePageLoader(page_fd))
 else:
-    serve_pages(S3PageLoader())
+    if PREEMPTIVE_FETCHING:
+        serve_pages(S3PageLoader(), PreemptiveCache())
+    else:
+        serve_pages(S3PageLoader())
