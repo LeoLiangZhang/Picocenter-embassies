@@ -397,6 +397,7 @@ class PicoManager:
     def execute(self, pico_id, internal_ip, portmaps, resume):
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
+            self._rm_pico_dir(pico_id)
             pico = Pico(self.config, pico_id, internal_ip, portmaps, resume)
             self._picos[pico_id] = pico
             self._execute(pico)
@@ -427,6 +428,11 @@ class PicoManager:
         pico.kill()
         del self._picos[pico_id]
 
+    def _rm_pico_dir(self, pico_id):
+        fmt = self.config.pico_path_fmt
+        pico_dir = fmt.format(pico_id, '')
+        shutil.rmtree(pico_dir, ignore_errors=True)
+
     def release(self, pico_id):
         '''Try to release the pico.
 
@@ -440,9 +446,7 @@ class PicoManager:
             return True
         if pico.should_alive:
             return False
-        fmt = self.config.pico_path_fmt
-        pico_dir = fmt.format(pico_id, '')
-        shutil.rmtree(pico_dir)
+        # self._rm_pico_dir(pico_id)
         del self._picos[pico_id]
         logger.debug('PicoManager.release %s', pico_dir)
 
@@ -672,6 +676,7 @@ class ResourceManager:
         self.status = hubproxy.WorkerStatus.AVAILABLE
 
     def make_hot(self, pico_id):
+        logger.debug('ResourceManager.make_hot(%s)', pico_id)
         if pico_id in self.warm_picos:
             del self.warm_picos[pico_id]
         self.hot_picos[pico_id] = True
@@ -679,11 +684,13 @@ class ResourceManager:
         self._update_hub_status()
 
     def make_warm(self, pico_id):
+        logger.debug('ResourceManager.make_warm(%s)', pico_id)
         if pico_id in self.hot_picos:
             del self.hot_picos[pico_id]
         self.warm_picos[pico_id] = True
 
     def remove(self, pico_id):
+        logger.debug('ResourceManager.remove(%s)', pico_id)
         if pico_id in self.hot_picos:
             del self.hot_picos[pico_id]
         if pico_id in self.warm_picos:
