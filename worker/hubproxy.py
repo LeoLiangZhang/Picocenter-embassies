@@ -32,6 +32,8 @@ class MockHubConnection:
         pass
     def update_worker_status(self, *args, **kwargs):
         pass
+    def pico_release(self, *args, **kwargs):
+        pass
 
 class HubConnection(object):
 

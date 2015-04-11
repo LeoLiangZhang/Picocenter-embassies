@@ -601,10 +601,11 @@ class Worker:
             fullpaths.append(fmt.format(pico_id, self.config.monitor_swap_page))
             def _release(uploader):
                 self.picoman.release(pico_id)
+                self.hub.pico_release(pico_id)
+                self.resouceman.remove(pico_id)
             self.s3man.upload(fullpaths, callback=_release)
         self.portmapper.remove_pico(pico_id)
         self.picoman.checkpoint(pico_id, ckpt_callback)
-        self.resouceman.remove(pico_id)
 
     def pico_nap(self, pico_id):
         logger.info('pico_nap(%s)', pico_id)
