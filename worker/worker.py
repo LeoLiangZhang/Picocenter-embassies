@@ -397,7 +397,6 @@ class PicoManager:
     def execute(self, pico_id, internal_ip, portmaps, resume):
         pico = self.get_pico_by_id(pico_id)
         if pico is None:
-            self._rm_pico_dir(pico_id)
             pico = Pico(self.config, pico_id, internal_ip, portmaps, resume)
             self._picos[pico_id] = pico
             self._execute(pico)
@@ -428,7 +427,7 @@ class PicoManager:
         pico.kill()
         del self._picos[pico_id]
 
-    def _rm_pico_dir(self, pico_id):
+    def rm_pico_dir(self, pico_id):
         fmt = self.config.pico_path_fmt
         pico_dir = fmt.format(pico_id, '')
         shutil.rmtree(pico_dir, ignore_errors=True)
@@ -446,9 +445,9 @@ class PicoManager:
             return True
         if pico.should_alive:
             return False
-        # self._rm_pico_dir(pico_id)
+        # self.rm_pico_dir(pico_id)
         del self._picos[pico_id]
-        logger.debug('PicoManager.release %s', pico_dir)
+        logger.debug('PicoManager.release %s', pico_id)
 
     def ensure_alive(self, pico_id):
         # TODO: This funciton needs more testing, especially CHECKPOINT case
@@ -580,6 +579,7 @@ class Worker:
             exit()
 
     def pico_exec(self, pico_id, internal_ip, s_portmaps, resume):
+        self.picoman.rm_pico_dir(pico_id)
         logger.info('pico_exec(%s, %s, %s, %s)',
             pico_id, internal_ip, s_portmaps, resume)
         if resume:

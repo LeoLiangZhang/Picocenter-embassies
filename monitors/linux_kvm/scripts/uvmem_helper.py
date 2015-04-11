@@ -23,7 +23,7 @@ S3_BUCKET_NAME = 'elasticity-storage'
 PICO_SWAP_FILE_FMT = '/pico/{pico_id}/kvm.swap.page'
 PAGE_MULTIPLIER = 32 # block_size = page_size * multiplier
 CACHE_CAPACITY = 40 # LRUCache capacity
-PREEMPTIVE_FETCHING = True
+PREEMPTIVE_FETCHING = False
 PREEMPTIVE_FETCHING_SIZE = 256
 PREEMPTIVE_FETCHING_FILENAME = 'precache.list'
 
