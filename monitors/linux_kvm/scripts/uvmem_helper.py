@@ -293,7 +293,7 @@ def serve_pages(loader, pre_cache=None):
                 hex(pg), ts, accumlated_paging_time)
 
 
-measure_webpage_load()
+# measure_webpage_load()
 if page_fd >= 0:
     serve_pages(FilePageLoader(page_fd))
 else:

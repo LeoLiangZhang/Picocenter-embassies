@@ -139,6 +139,10 @@ schroot -- sudo apt-get install python2.6-dev iptables curl python-pip net-tools
 
 sudo apt-get install build-essential
 
+# Deployment
+
+sudo ln -s /elasticity/embassies/worker/embassies_iptables_rsyslog.conf /etc/rsyslog.d/embassies_iptables_rsyslog.conf
+
 # basic datastructure
 
 In `/common/utils/`
