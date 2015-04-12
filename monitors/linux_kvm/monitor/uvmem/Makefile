@@ -8,6 +8,8 @@ KDIR ?= /lib/modules/`uname -r`/build
 
 SYSMAP_SYMBOLS = shmem_zero_setup
 
+all : build
+
 uvmem_sysmap.h :
 	/bin/bash make_uvmem_sysmap.sh $(SYSMAP_SYMBOLS) > $@
 
@@ -25,7 +27,6 @@ insmod : uvmem.ko
 rmmod :
 	sudo rmmod uvmem
 
-all : build
 .PHONY : all clean build rmmod chown insmod
 
 testbin :
