@@ -51,7 +51,7 @@ TARGETS=\
 	elf_loader.lighttpd.signed \
 	elf_loader.python.signed \
 	elf_loader.monkey.signed \
-	elf_loader.nodejs.signed \
+#	elf_loader.nodejs.signed \
 
 COMMON_UTILS_MODULE=$(ZOOG_ROOT)/common/utils/
 ELF_COMMON_MODULE=$(ZOOG_ROOT)/toolchains/linux_elf/common/
