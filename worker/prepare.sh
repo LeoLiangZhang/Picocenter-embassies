@@ -27,4 +27,5 @@ echo 'List dependencies'
 ls -l /dev/uvmem
 ls -l $WORKER_DIR/iptables_helper/build/iptables_helper
 ls -l /etc/rsyslog.d/$EMBASSIES_IPTABLES_FILE
+sudo iptables -t nat -nvL
 echo "DONE"
