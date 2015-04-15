@@ -6,7 +6,7 @@ LDFLAGS=
 
 all: $(BUILD) $(BUILD)/iptables_helper set_root
 
-.PHONY: clean all set_root
+.PHONY: clean set_root
 clean:
 	rm -r $(BUILD)
 
